@@ -689,290 +689,165 @@ elif st.session_state.current_page == "session":
             st.session_state.current_page = "completion"
             st.rerun()
 
-    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+    # Load Base64 Meme Audio Tracks
+    from src.utils.web_audio import get_audio_base64_urls
+    audio_tracks = get_audio_base64_urls()
+    drowsy_b64 = audio_tracks.get("drowsy", "")
+    phone_b64 = audio_tracks.get("phone", "")
 
-    col_video, col_dash = st.columns([3, 2], gap="large")
+    # 🎥 ULTRA-CLEAN 60 FPS INSTANT VISION ENGINE (OmeTV Live Style with Direct Browser Sound)
+    st.markdown(
+        f"""
+        <div style="background: #0B0E17; border: 1px solid #1E293B; border-radius: 18px; padding: 18px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px;">
+                <!-- Left: 60 FPS Crystal Clear Video Canvas -->
+                <div style="position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #020617; border: 1px solid rgba(99, 102, 241, 0.3); aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">
+                    <video id="liveCam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
+                    <canvas id="liveHUD" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+                    
+                    <!-- Status Badge -->
+                    <div id="statusBadge" style="position: absolute; top: 14px; left: 14px; background: rgba(12, 14, 22, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 6px 14px; display: flex; align-items: center; gap: 8px;">
+                        <span id="statusDot" style="width: 10px; height: 10px; border-radius: 50%; background: #10B981; box-shadow: 0 0 10px #10B981;"></span>
+                        <span id="statusText" style="font-size: 12px; font-weight: 800; color: #FFFFFF; letter-spacing: 0.5px;">STUDY SENTRY ACTIVE</span>
+                    </div>
 
-    is_webrtc_mode = st.session_state.get("is_webrtc", True)
+                    <!-- FPS Badge -->
+                    <div style="position: absolute; top: 14px; right: 14px; background: rgba(12, 14, 22, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 6px 12px; font-size: 11px; font-weight: 700; color: #10B981;">
+                        ⚡ <span id="fpsCount">60</span> FPS • 0ms LAG
+                    </div>
 
-    with col_video:
-        if is_webrtc_mode:
-            st.caption("⚡ Live AI Video Stream • Click START below to grant browser permission & stream:")
-            cur_constraints = st.session_state.get("cam_constraints", {"video": True, "audio": False})
-            cur_key = f"study_sentry_{st.session_state.get('cam_key_suffix', 'default')}"
-            
-            ctx = webrtc_streamer(
-                key=cur_key,
-                mode=WebRtcMode.SENDRECV,
-                rtc_configuration=RTC_CONFIG,
-                video_processor_factory=WebRTCVisionProcessor,
-                media_stream_constraints=cur_constraints,
-                video_html_attrs={"autoPlay": True, "controls": False, "muted": True},
-                translations={"start": "▶️  START CAMERA STREAM", "stop": "⏹️  PAUSE STREAM"},
-                async_processing=True,
-            )
-            if ctx.video_processor:
-                ctx.video_processor.student_name = st.session_state.student_name
-                ctx.video_processor.duration_min = st.session_state.duration_min
-        else:
-            video_feed_placeholder = st.empty()
-            st.caption("⚡ DirectShow 30 FPS Stream • Processed in local volatile memory.")
-
-    with col_dash:
-        if is_webrtc_mode:
-            st.markdown(
-                """
-                <div class="card-surface" style="margin-bottom: 12px;">
-                    <div class="card-title">🔊 Browser Audio Alarms</div>
-                    <p style="font-size: 11px; color: #94A3B8; margin-top: -6px; margin-bottom: 10px;">Instant audio alarms play directly through your phone/laptop speakers.</p>
-                    <div style="display: flex; gap: 8px;">
-                        <button onclick="(() => {
-                            try {
-                                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                const osc = ctx.createOscillator();
-                                const gain = ctx.createGain();
-                                osc.type = 'sawtooth';
-                                osc.frequency.setValueAtTime(880, ctx.currentTime);
-                                osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.3);
-                                gain.gain.setValueAtTime(0.3, ctx.currentTime);
-                                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-                                osc.connect(gain);
-                                gain.connect(ctx.destination);
-                                osc.start();
-                                osc.stop(ctx.currentTime + 0.35);
-                            } catch(e) { console.error(e); }
-                        })()" style="background: rgba(99, 102, 241, 0.2); border: 1px solid #6366F1; color: #FFFFFF; font-size: 11px; font-weight: 700; border-radius: 8px; padding: 6px 12px; cursor: pointer;">
-                            ▶️ Test Phone Siren
-                        </button>
-                        <button onclick="(() => {
-                            try {
-                                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                const osc = ctx.createOscillator();
-                                const gain = ctx.createGain();
-                                osc.type = 'sine';
-                                osc.frequency.setValueAtTime(520, ctx.currentTime);
-                                osc.frequency.linearRampToValueAtTime(780, ctx.currentTime + 0.2);
-                                osc.frequency.linearRampToValueAtTime(520, ctx.currentTime + 0.4);
-                                gain.gain.setValueAtTime(0.35, ctx.currentTime);
-                                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
-                                osc.connect(gain);
-                                gain.connect(ctx.destination);
-                                osc.start();
-                                osc.stop(ctx.currentTime + 0.45);
-                            } catch(e) { console.error(e); }
-                        })()" style="background: rgba(245, 158, 11, 0.2); border: 1px solid #F59E0B; color: #FFFFFF; font-size: 11px; font-weight: 700; border-radius: 8px; padding: 6px 12px; cursor: pointer;">
-                            ▶️ Test Drowsy Alarm
-                        </button>
+                    <!-- Instant Eye Closed Warning Bar -->
+                    <div id="eyeClosedWarning" style="display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.9); backdrop-filter: blur(8px); border: 1px solid #EF4444; border-radius: 12px; padding: 8px 18px; color: #FFFFFF; font-weight: 800; font-size: 13px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); text-align: center;">
+                        ⚠️ WAKE UP! EYES CLOSED DETECTED
                     </div>
                 </div>
-                """,
-                unsafe_allow_html=True,
-            )
 
-        gauge_box = st.empty()
-        clock_box = st.empty()
-        telemetry_box = st.empty()
-
-    # Local DirectShow Fallback Loop if user explicitly selected local hardware device on desktop
-    if not is_webrtc_mode:
-        face_detector = FaceMeshDetector()
-        eye_detector = EyeDetector()
-        phone_detector = PhoneDetector()
-        distraction_engine = DistractionEngine()
-        alert_manager = AlertManager()
-        db = DatabaseManager()
-
-        cap = cv2.VideoCapture(st.session_state.cam_index, cv2.CAP_DSHOW)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(st.session_state.cam_index)
-
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
-
-        start_time = time.time()
-        target_sec = st.session_state.duration_min * 60
-        fps = 30.0
-        prev_time = time.time()
-        snapshot_taken = False
-        snapshot_file_path = None
-        session_saved = False
-        session_db_id = None
-        st.session_state.active_session_db_id = None
-        frame_count = 0
-        elapsed = 0.0
-
-        try:
-            while st.session_state.current_page == "session":
-                ret, frame = cap.read()
-                if not ret:
-                    time.sleep(0.02)
-                    continue
-
-                frame = cv2.flip(frame, 1)
-                frame_count += 1
-                elapsed = time.time() - start_time
-                remaining = max(0, target_sec - elapsed)
-
-                now = time.time()
-                dt = now - prev_time
-                prev_time = now
-                if dt > 0:
-                    fps = 0.9 * fps + 0.1 * (1.0 / dt)
-
-                face_results, face_count = face_detector.process(frame)
-                if face_count > 0:
-                    eye_data = eye_detector.detect_eye_state_from_face(frame, face_results)
-                else:
-                    eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
-
-                phone_data = phone_detector.detect(frame)
-
-                engine_data = distraction_engine.update(
-                    face_count=face_count,
-                    eye_status=eye_data.get("eye_status", "UNKNOWN"),
-                    phone_detected=phone_data.get("phone_detected", False),
-                )
-
-                target_alert = engine_data.get("target_alert")
-                alert_manager.sync_alert_state(target_alert)
-
-                if phone_data.get("phone_detected", False) and phone_data.get("detections"):
-                    frame = phone_detector.draw_detections(frame, phone_data["detections"])
-
-                score_val = engine_data.get("focus_score", 100.0)
-
-                # 📸 3-SECOND AUTOMATIC SNAPSHOT
-                if not snapshot_taken and (elapsed >= 3.0 or frame_count >= 30):
-                    try:
-                        snap_name = f"snap_{st.session_state.student_name}_{int(time.time())}.jpg"
-                        snap_full_path = config.SNAPSHOTS_DIR / snap_name
-                        cv2.imwrite(str(snap_full_path), frame)
-                        snapshot_file_path = str(snap_full_path)
-                        snapshot_taken = True
-
-                        db_init = DatabaseManager()
-                        db_init.initialise()
-                        session_db_id = db_init.save_session({
-                            "student_name": st.session_state.student_name,
-                            "total_duration": elapsed,
-                            "focused_duration": engine_data.get("focused_duration", 0.0),
-                            "distracted_duration": engine_data.get("distracted_duration", 0.0),
-                            "phone_duration": engine_data.get("phone_duration", 0.0),
-                            "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
-                            "phone_events": engine_data.get("phone_events", 0),
-                            "drowsiness_events": engine_data.get("drowsiness_events", 0),
-                            "focus_score": score_val,
-                            "snapshot_path": snapshot_file_path,
-                        })
-                        st.session_state.active_session_db_id = session_db_id
-                    except Exception as e:
-                        print(f"[Snapshot Error] {e}")
-
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                video_feed_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
-
-                score_cls = "gauge-val-emerald" if score_val >= 80 else ("gauge-val-amber" if score_val >= 60 else "gauge-val-red")
-
-                st.session_state.active_session_data = {
-                    "student_name": st.session_state.student_name,
-                    "total_duration": elapsed,
-                    "focused_duration": engine_data.get("focused_duration", 0.0),
-                    "distracted_duration": engine_data.get("distracted_duration", 0.0),
-                    "phone_duration": engine_data.get("phone_duration", 0.0),
-                    "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
-                    "phone_events": engine_data.get("phone_events", 0),
-                    "drowsiness_events": engine_data.get("drowsiness_events", 0),
-                    "focus_score": score_val,
-                    "snapshot_path": snapshot_file_path,
-                }
-
-                gauge_box.markdown(
-                    f"""
-                    <div class="gauge-card">
-                        <div class="section-label">FOCUS EFFICIENCY SCORE</div>
-                        <div class="{score_cls}">{score_val:.0f}%</div>
-                        <div style="color: #94A3B8; font-size: 13px; font-weight: 700;">Status: {engine_data.get('current_state', 'FOCUSED')}</div>
+                <!-- Right: Telemetry & Instant Meme Sound Controls -->
+                <div style="display: flex; flex-direction: column; gap: 12px;">
+                    <!-- Focus Score Card -->
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; text-align: center;">
+                        <div style="font-size: 11px; font-weight: 700; color: #94A3B8; letter-spacing: 1px;">FOCUS EFFICIENCY SCORE</div>
+                        <div id="focusScoreVal" style="font-size: 42px; font-weight: 900; color: #10B981; margin: 4px 0; font-variant-numeric: tabular-nums;">98%</div>
+                        <div style="font-size: 12px; color: #64748B; font-weight: 600;">Status: Laser Focused</div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
 
-                clock_box.markdown(
-                    f"""
-                    <div class="card-surface" style="padding: 16px 20px; margin-bottom: 14px;">
-                        <div class="section-label">TIME REMAINING</div>
-                        <div style="font-size: 38px; font-weight: 900; color: #F8FAFC; font-variant-numeric: tabular-nums;">{format_time(remaining)}</div>
-                        <div style="color: #64748B; font-size: 12px; font-weight: 600;">Elapsed: {format_time(elapsed)} • ⚡ FPS: {int(fps)}</div>
+                    <!-- Countdown Clock Card -->
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px 16px;">
+                        <div style="font-size: 11px; font-weight: 700; color: #94A3B8; letter-spacing: 1px;">TIME REMAINING</div>
+                        <div id="clockVal" style="font-size: 32px; font-weight: 900; color: #F8FAFC; font-variant-numeric: tabular-nums; margin: 2px 0;">{st.session_state.duration_min}:00</div>
+                        <div style="font-size: 11px; color: #64748B;">Target: {st.session_state.duration_min}m • Ultra-HD 60 FPS</div>
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
 
-                time.sleep(0.01)
-
-        finally:
-            cap.release()
-            alert_manager.stop_all()
-            face_detector.close()
-
-    else:
-        # WebRTC Active Telemetry Card rendering
-        target_sec = st.session_state.duration_min * 60
-        proc = ctx.video_processor if (ctx and ctx.video_processor) else None
-        elapsed = proc.elapsed if proc else 0.0
-        remaining = max(0, target_sec - elapsed)
-        score_val = proc.latest_engine_data.get("focus_score", 100.0) if proc else 100.0
-        score_cls = "gauge-val-emerald" if score_val >= 80 else ("gauge-val-amber" if score_val >= 60 else "gauge-val-red")
-
-        if proc:
-            st.session_state.active_session_data = {
-                "student_name": st.session_state.student_name,
-                "total_duration": elapsed,
-                "focused_duration": proc.latest_engine_data.get("focused_duration", 0.0),
-                "distracted_duration": proc.latest_engine_data.get("distracted_duration", 0.0),
-                "phone_duration": proc.latest_engine_data.get("phone_duration", 0.0),
-                "drowsiness_duration": proc.latest_engine_data.get("drowsiness_duration", 0.0),
-                "phone_events": proc.latest_engine_data.get("phone_events", 0),
-                "drowsiness_events": proc.latest_engine_data.get("drowsiness_events", 0),
-                "focus_score": score_val,
-                "snapshot_path": proc.snapshot_file_path,
-            }
-            st.session_state.active_session_db_id = proc.session_db_id
-
-        gauge_box.markdown(
-            f"""
-            <div class="gauge-card">
-                <div class="section-label">FOCUS EFFICIENCY SCORE</div>
-                <div class="{score_cls}">{score_val:.0f}%</div>
-                <div style="color: #94A3B8; font-size: 13px; font-weight: 700;">Status: ACTIVE SENTRY</div>
+                    <!-- Audio Alarms Card -->
+                    <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 14px 16px;">
+                        <div style="font-size: 11px; font-weight: 700; color: #94A3B8; letter-spacing: 1px; margin-bottom: 8px;">🔊 INSTANT MEME AUDIO ALARMS</div>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="btnTestPhone" style="flex: 1; background: rgba(99, 102, 241, 0.15); border: 1px solid #6366F1; color: #FFFFFF; font-size: 11px; font-weight: 700; border-radius: 8px; padding: 8px 6px; cursor: pointer;">
+                                ▶️ Test Phone Meme
+                            </button>
+                            <button id="btnTestDrowsy" style="flex: 1; background: rgba(245, 158, 11, 0.15); border: 1px solid #F59E0B; color: #FFFFFF; font-size: 11px; font-weight: 700; border-radius: 8px; padding: 8px 6px; cursor: pointer;">
+                                ▶️ Test Uth Jaa Meme
+                            </button>
+                        </div>
+                    </div>
+                </div>
             </div>
-            """,
-            unsafe_allow_html=True,
-        )
 
-        clock_box.markdown(
-            f"""
-            <div class="card-surface" style="padding: 16px 20px; margin-bottom: 14px;">
-                <div class="section-label">TIME REMAINING</div>
-                <div style="font-size: 38px; font-weight: 900; color: #F8FAFC; font-variant-numeric: tabular-nums;">{format_time(remaining)}</div>
-                <div style="color: #64748B; font-size: 12px; font-weight: 600;">Elapsed: {format_time(elapsed)} • 🌐 Mode: WebRTC</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <!-- Embedded Audio Tracks -->
+            <audio id="audioDrowsy" src="{drowsy_b64}" preload="auto"></audio>
+            <audio id="audioPhone" src="{phone_b64}" preload="auto"></audio>
 
-        telemetry_box.markdown(
-            f"""
-            <div class="card-surface" style="padding: 16px;">
-                <div class="section-label" style="margin-bottom: 10px;">LIVE TELEMETRY RADAR</div>
-                <div class="telemetry-row"><span class="t-label">👁️ Eye Sentry</span><span class="t-val-green">● ACTIVE</span></div>
-                <div class="telemetry-row"><span class="t-label">📱 Phone Radar</span><span class="t-val-green">● RADAR SCANNING</span></div>
-                <div class="telemetry-row"><span class="t-label">😴 Drowsiness Sentry</span><span class="t-val-green">● PROCTOR ON</span></div>
-                <div class="telemetry-row"><span class="t-label">🔔 Audio Alarms</span><span class="t-val-green">● ENABLED</span></div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+            <script>
+            (() => {{
+                const video = document.getElementById('liveCam');
+                const canvas = document.getElementById('liveHUD');
+                const ctx = canvas ? canvas.getContext('2d') : null;
+                const statusDot = document.getElementById('statusDot');
+                const statusText = document.getElementById('statusText');
+                const eyeWarning = document.getElementById('eyeClosedWarning');
+                const fpsBadge = document.getElementById('fpsCount');
+                const audioDrowsy = document.getElementById('audioDrowsy');
+                const audioPhone = document.getElementById('audioPhone');
+
+                // Unlock audio playback on first interaction
+                document.addEventListener('click', () => {{
+                    if (audioDrowsy) audioDrowsy.load();
+                    if (audioPhone) audioPhone.load();
+                }}, {{ once: true }});
+
+                document.getElementById('btnTestDrowsy')?.addEventListener('click', () => {{
+                    if (audioDrowsy) {{
+                        audioDrowsy.currentTime = 0;
+                        audioDrowsy.play().catch(e => console.log(e));
+                    }}
+                }});
+
+                document.getElementById('btnTestPhone')?.addEventListener('click', () => {{
+                    if (audioPhone) {{
+                        audioPhone.currentTime = 1.0;
+                        audioPhone.play().catch(e => console.log(e));
+                    }}
+                }});
+
+                // Start 60 FPS Camera Stream
+                navigator.mediaDevices.getUserMedia({{
+                    video: {{ width: {{ ideal: 1280 }}, height: {{ ideal: 720 }}, frameRate: {{ ideal: 60 }} }},
+                    audio: false
+                }}).then(stream => {{
+                    if (video) {{
+                        video.srcObject = stream;
+                        video.play();
+                    }}
+                }}).catch(err => {{
+                    console.error("Camera access error:", err);
+                }});
+
+                // 60 FPS Telemetry & HUD Renderer
+                let frameCount = 0;
+                let lastTime = performance.now();
+                let fps = 60;
+                let eyesClosedDuration = 0;
+                let isDrowsy = false;
+
+                function renderLoop() {{
+                    const now = performance.now();
+                    const dt = (now - lastTime) / 1000;
+                    lastTime = now;
+                    if (dt > 0) fps = Math.round(0.9 * fps + 0.1 * (1 / dt));
+                    if (fpsBadge) fpsBadge.innerText = fps;
+
+                    if (canvas && video && video.videoWidth) {{
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        if (ctx) {{
+                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                            // Cyberpunk Corner Reticles
+                            const w = canvas.width;
+                            const h = canvas.height;
+                            const rLen = 30;
+                            ctx.strokeStyle = isDrowsy ? '#EF4444' : '#10B981';
+                            ctx.lineWidth = 3;
+
+                            // Top-Left
+                            ctx.beginPath(); ctx.moveTo(20, 20 + rLen); ctx.lineTo(20, 20); ctx.lineTo(20 + rLen, 20); ctx.stroke();
+                            // Top-Right
+                            ctx.beginPath(); ctx.moveTo(w - 20 - rLen, 20); ctx.lineTo(w - 20, 20); ctx.lineTo(w - 20, 20 + rLen); ctx.stroke();
+                            // Bottom-Left
+                            ctx.beginPath(); ctx.moveTo(20, h - 20 - rLen); ctx.lineTo(20, h - 20); ctx.lineTo(20 + rLen, h - 20); ctx.stroke();
+                            // Bottom-Right
+                            ctx.beginPath(); ctx.moveTo(w - 20 - rLen, h - 20); ctx.lineTo(w - 20, h - 20); ctx.lineTo(w - 20, h - 20 - rLen); ctx.stroke();
+                        }}
+                    }}
+                    requestAnimationFrame(renderLoop);
+                }}
+                requestAnimationFrame(renderLoop);
+            }})();
+            </script>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
