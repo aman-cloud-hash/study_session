@@ -695,7 +695,7 @@ elif st.session_state.current_page == "session":
     drowsy_b64 = audio_tracks.get("drowsy", "")
     phone_b64 = audio_tracks.get("phone", "")
 
-    # 🎥 ULTRA-CLEAN 60 FPS INSTANT VISION ENGINE (OmeTV Live Style with Direct Browser Sound)
+    # 🎥 ULTRA-CLEAN 60 FPS INSTANT VISION ENGINE (OmeTV Live Style with Direct Browser Sound & Real-Time AI)
     import streamlit.components.v1 as components
 
     components.html(
@@ -713,6 +713,11 @@ elif st.session_state.current_page == "session":
                     color: #FFFFFF;
                 }}
             </style>
+            <!-- Google MediaPipe FaceMesh & TensorFlow.js CDN -->
+            <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+            <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+            <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js" crossorigin="anonymous"></script>
+            <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@latest/dist/coco-ssd.min.js" crossorigin="anonymous"></script>
         </head>
         <body>
         <div style="background: #0B0E17; border: 1px solid #1E293B; border-radius: 18px; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
@@ -720,7 +725,7 @@ elif st.session_state.current_page == "session":
                 <!-- Left: 60 FPS Crystal Clear Video Canvas -->
                 <div style="position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #020617; border: 1px solid rgba(99, 102, 241, 0.3); aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">
                     <video id="liveCam" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
-                    <canvas id="liveHUD" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+                    <canvas id="liveHUD" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; transform: scaleX(-1);"></canvas>
                     
                     <!-- Status Badge -->
                     <div id="statusBadge" style="position: absolute; top: 14px; left: 14px; background: rgba(12, 14, 22, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 6px 14px; display: flex; align-items: center; gap: 8px;">
@@ -730,7 +735,7 @@ elif st.session_state.current_page == "session":
 
                     <!-- FPS Badge -->
                     <div style="position: absolute; top: 14px; right: 14px; background: rgba(12, 14, 22, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 6px 12px; font-size: 11px; font-weight: 700; color: #10B981;">
-                        ⚡ <span id="fpsCount">60</span> FPS • 0ms LAG
+                        ⚡ <span id="fpsCount">60</span> FPS • <span id="aiModelStatus" style="color: #818CF8;">AI LOADING...</span>
                     </div>
 
                     <!-- Permission & Camera Launch Overlay -->
@@ -744,8 +749,13 @@ elif st.session_state.current_page == "session":
                     </div>
 
                     <!-- Instant Eye Closed Warning Bar -->
-                    <div id="eyeClosedWarning" style="display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.9); backdrop-filter: blur(8px); border: 1px solid #EF4444; border-radius: 12px; padding: 8px 18px; color: #FFFFFF; font-weight: 800; font-size: 13px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); text-align: center;">
-                        ⚠️ WAKE UP! EYES CLOSED DETECTED
+                    <div id="eyeClosedWarning" style="display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(239, 68, 68, 0.9); backdrop-filter: blur(8px); border: 1px solid #EF4444; border-radius: 12px; padding: 8px 18px; color: #FFFFFF; font-weight: 800; font-size: 13px; box-shadow: 0 0 20px rgba(239, 68, 68, 0.6); text-align: center; white-space: nowrap;">
+                        ⚠️ WAKE UP! DROWSINESS DETECTED
+                    </div>
+
+                    <!-- Instant Phone Warning Bar -->
+                    <div id="phoneWarning" style="display: none; position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(220, 38, 38, 0.9); backdrop-filter: blur(8px); border: 1px solid #DC2626; border-radius: 12px; padding: 8px 18px; color: #FFFFFF; font-weight: 800; font-size: 13px; box-shadow: 0 0 20px rgba(220, 38, 38, 0.6); text-align: center; white-space: nowrap;">
+                        📱 PUT YOUR PHONE AWAY! DISTRACTION DETECTED
                     </div>
                 </div>
 
@@ -754,8 +764,8 @@ elif st.session_state.current_page == "session":
                     <!-- Focus Score Card -->
                     <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 16px; text-align: center;">
                         <div style="font-size: 11px; font-weight: 700; color: #94A3B8; letter-spacing: 1px;">FOCUS EFFICIENCY SCORE</div>
-                        <div id="focusScoreVal" style="font-size: 42px; font-weight: 900; color: #10B981; margin: 4px 0; font-variant-numeric: tabular-nums;">98%</div>
-                        <div style="font-size: 12px; color: #64748B; font-weight: 600;">Status: Laser Focused</div>
+                        <div id="focusScoreVal" style="font-size: 42px; font-weight: 900; color: #10B981; margin: 4px 0; font-variant-numeric: tabular-nums;">100%</div>
+                        <div id="focusStatusLabel" style="font-size: 12px; color: #64748B; font-weight: 600;">Status: Laser Focused</div>
                     </div>
 
                     <!-- Countdown Clock Card -->
@@ -781,8 +791,8 @@ elif st.session_state.current_page == "session":
             </div>
 
             <!-- Embedded Audio Tracks -->
-            <audio id="audioDrowsy" src="{drowsy_b64}" preload="auto"></audio>
-            <audio id="audioPhone" src="{phone_b64}" preload="auto"></audio>
+            <audio id="audioDrowsy" src="{drowsy_b64}" preload="auto" loop></audio>
+            <audio id="audioPhone" src="{phone_b64}" preload="auto" loop></audio>
         </div>
 
         <script>
@@ -792,14 +802,28 @@ elif st.session_state.current_page == "session":
             const ctx = canvas ? canvas.getContext('2d') : null;
             const startOverlay = document.getElementById('camStartOverlay');
             const btnStart = document.getElementById('btnStartStream');
+            const statusDot = document.getElementById('statusDot');
+            const statusText = document.getElementById('statusText');
             const eyeWarning = document.getElementById('eyeClosedWarning');
+            const phoneWarning = document.getElementById('phoneWarning');
             const fpsBadge = document.getElementById('fpsCount');
+            const aiStatusBadge = document.getElementById('aiModelStatus');
+            const focusScoreVal = document.getElementById('focusScoreVal');
+            const focusStatusLabel = document.getElementById('focusStatusLabel');
             const clockVal = document.getElementById('clockVal');
             const audioDrowsy = document.getElementById('audioDrowsy');
             const audioPhone = document.getElementById('audioPhone');
 
             let sessionSeconds = {st.session_state.duration_min} * 60;
             let elapsed = 0;
+            let currentScore = 100;
+            let cocoModel = null;
+            let faceMesh = null;
+            let phoneDetections = [];
+            let eyesClosedStart = null;
+            let eyeClosedTimer = 0;
+            let isPhoneDistraction = false;
+            let isDrowsyDistraction = false;
 
             function formatTime(sec) {{
                 const m = Math.floor(sec / 60).toString().padStart(2, '0');
@@ -829,6 +853,76 @@ elif st.session_state.current_page == "session":
                 }}
             }});
 
+            // 1. Initialize TensorFlow.js COCO-SSD Phone Detector
+            if (window.cocoSsd) {{
+                cocoSsd.load().then(model => {{
+                    cocoModel = model;
+                    if (aiStatusBadge) aiStatusBadge.innerText = 'AI READY';
+                    console.log("[AI Sentry] COCO-SSD Loaded!");
+                }}).catch(e => console.error("COCO-SSD error:", e));
+            }}
+
+            // 2. Initialize MediaPipe 3D FaceMesh
+            if (window.FaceMesh) {{
+                faceMesh = new FaceMesh({{
+                    locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${{file}}`
+                }});
+                faceMesh.setOptions({{
+                    maxNumFaces: 1,
+                    refineLandmarks: true,
+                    minDetectionConfidence: 0.5,
+                    minTrackingConfidence: 0.5
+                }});
+                faceMesh.onResults(onFaceMeshResults);
+            }}
+
+            function dist(p1, p2) {{
+                return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+            }}
+
+            function computeEAR(mesh, idxs) {{
+                const p1 = mesh[idxs[0]], p2 = mesh[idxs[1]], p3 = mesh[idxs[2]];
+                const p4 = mesh[idxs[3]], p5 = mesh[idxs[4]], p6 = mesh[idxs[5]];
+                const vertical = dist(p2, p6) + dist(p3, p5);
+                const horizontal = 2.0 * dist(p1, p4);
+                return horizontal > 0 ? (vertical / horizontal) : 0.3;
+            }}
+
+            function onFaceMeshResults(results) {{
+                if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {{
+                    return;
+                }}
+                const mesh = results.multiFaceLandmarks[0];
+                const leftEAR = computeEAR(mesh, [362, 385, 387, 263, 373, 380]);
+                const rightEAR = computeEAR(mesh, [33, 160, 158, 133, 153, 144]);
+                const avgEAR = (leftEAR + rightEAR) / 2.0;
+
+                const now = performance.now();
+                if (avgEAR < 0.22) {{
+                    if (!eyesClosedStart) eyesClosedStart = now;
+                    eyeClosedTimer = (now - eyesClosedStart) / 1000;
+                    if (eyeClosedTimer >= 1.2) {{
+                        isDrowsyDistraction = true;
+                    }}
+                }} else {{
+                    eyesClosedStart = null;
+                    eyeClosedTimer = 0;
+                    isDrowsyDistraction = false;
+                }}
+            }}
+
+            // 3. Periodic Phone Radar Scan (Every 300ms)
+            setInterval(async () => {{
+                if (cocoModel && video && video.readyState >= 2) {{
+                    try {{
+                        const predictions = await cocoModel.detect(video);
+                        phoneDetections = predictions.filter(p => p.class === 'cell phone' && p.score > 0.40);
+                        isPhoneDistraction = phoneDetections.length > 0;
+                    }} catch (e) {{}}
+                }}
+            }}, 300);
+
+            // 4. Start Camera Stream
             function startCamera() {{
                 if (audioDrowsy) audioDrowsy.load();
                 if (audioPhone) audioPhone.load();
@@ -842,6 +936,18 @@ elif st.session_state.current_page == "session":
                         video.play();
                     }}
                     if (startOverlay) startOverlay.style.display = 'none';
+
+                    // Connect video to MediaPipe Camera Utils
+                    if (window.Camera && faceMesh) {{
+                        const camera = new Camera(video, {{
+                            onFrame: async () => {{
+                                await faceMesh.send({{ image: video }});
+                            }},
+                            width: 640,
+                            height: 480
+                        }});
+                        camera.start();
+                    }}
                 }}).catch(err => {{
                     console.error("Camera access error:", err);
                     alert("Camera access denied. Please click 'Allow' in your browser permissions bar.");
@@ -850,14 +956,13 @@ elif st.session_state.current_page == "session":
 
             btnStart?.addEventListener('click', startCamera);
 
-            // Auto-start camera if permissions are already granted
             navigator.permissions?.query({{ name: 'camera' }}).then(res => {{
                 if (res.state === 'granted') {{
                     startCamera();
                 }}
             }}).catch(() => {{}});
 
-            // 60 FPS Telemetry & HUD Loop
+            // 5. 60 FPS Telemetry, Audio Sync & Cyberpunk HUD Loop
             let lastTime = performance.now();
             let fps = 60;
 
@@ -868,27 +973,82 @@ elif st.session_state.current_page == "session":
                 if (dt > 0) fps = Math.round(0.9 * fps + 0.1 * (1 / dt));
                 if (fpsBadge) fpsBadge.innerText = fps;
 
+                // Sync Distraction Audio & Visual Alerts
+                if (isPhoneDistraction) {{
+                    if (statusDot) statusDot.style.background = '#DC2626';
+                    if (statusText) statusText.innerText = '🚨 PHONE DETECTED';
+                    if (phoneWarning) phoneWarning.style.display = 'block';
+                    if (eyeWarning) eyeWarning.style.display = 'none';
+                    if (focusStatusLabel) focusStatusLabel.innerText = 'Distraction: Mobile Phone';
+                    currentScore = Math.max(20, currentScore - 0.05);
+
+                    if (audioPhone && audioPhone.paused) {{
+                        audioPhone.currentTime = 1.0;
+                        audioPhone.play().catch(() => {{}});
+                    }}
+                    if (audioDrowsy && !audioDrowsy.paused) audioDrowsy.pause();
+
+                }} else if (isDrowsyDistraction) {{
+                    if (statusDot) statusDot.style.background = '#F59E0B';
+                    if (statusText) statusText.innerText = '😴 DROWSINESS DETECTED';
+                    if (eyeWarning) {{
+                        eyeWarning.style.display = 'block';
+                        eyeWarning.innerText = `⚠️ WAKE UP! EYES CLOSED (${{eyeClosedTimer.toFixed(1)}}s)`;
+                    }}
+                    if (phoneWarning) phoneWarning.style.display = 'none';
+                    if (focusStatusLabel) focusStatusLabel.innerText = 'Distraction: Drowsiness Alert';
+                    currentScore = Math.max(20, currentScore - 0.08);
+
+                    if (audioDrowsy && audioDrowsy.paused) {{
+                        audioDrowsy.currentTime = 0;
+                        audioDrowsy.play().catch(() => {{}});
+                    }}
+                    if (audioPhone && !audioPhone.paused) audioPhone.pause();
+
+                }} else {{
+                    if (statusDot) statusDot.style.background = '#10B981';
+                    if (statusText) statusText.innerText = 'STUDY SENTRY ACTIVE';
+                    if (eyeWarning) eyeWarning.style.display = 'none';
+                    if (phoneWarning) phoneWarning.style.display = 'none';
+                    if (focusStatusLabel) focusStatusLabel.innerText = 'Status: Laser Focused';
+                    currentScore = Math.min(100, currentScore + 0.02);
+
+                    if (audioDrowsy && !audioDrowsy.paused) {{ audioDrowsy.pause(); audioDrowsy.currentTime = 0; }}
+                    if (audioPhone && !audioPhone.paused) {{ audioPhone.pause(); audioPhone.currentTime = 0; }}
+                }}
+
+                if (focusScoreVal) focusScoreVal.innerText = `${{Math.round(currentScore)}}%`;
+
+                // Draw Cyberpunk Reticles & Phone Bounding Box
                 if (canvas && video && video.videoWidth) {{
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
                     if (ctx) {{
                         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-                        // Cyberpunk Corner Reticles
+                        // Draw Corner Reticles
                         const w = canvas.width;
                         const h = canvas.height;
                         const rLen = 35;
-                        ctx.strokeStyle = '#10B981';
+                        ctx.strokeStyle = isPhoneDistraction ? '#DC2626' : (isDrowsyDistraction ? '#F59E0B' : '#10B981');
                         ctx.lineWidth = 3;
 
-                        // Top-Left
                         ctx.beginPath(); ctx.moveTo(20, 20 + rLen); ctx.lineTo(20, 20); ctx.lineTo(20 + rLen, 20); ctx.stroke();
-                        // Top-Right
                         ctx.beginPath(); ctx.moveTo(w - 20 - rLen, 20); ctx.lineTo(w - 20, 20); ctx.lineTo(w - 20, 20 + rLen); ctx.stroke();
-                        // Bottom-Left
                         ctx.beginPath(); ctx.moveTo(20, h - 20 - rLen); ctx.lineTo(20, h - 20); ctx.lineTo(20 + rLen, h - 20); ctx.stroke();
-                        // Bottom-Right
                         ctx.beginPath(); ctx.moveTo(w - 20 - rLen, h - 20); ctx.lineTo(w - 20, h - 20); ctx.lineTo(w - 20, h - 20 - rLen); ctx.stroke();
+
+                        // Draw Bounding Boxes for detected phone
+                        if (phoneDetections.length > 0) {{
+                            ctx.strokeStyle = '#DC2626';
+                            ctx.fillStyle = 'rgba(220, 38, 38, 0.2)';
+                            ctx.lineWidth = 2;
+                            phoneDetections.forEach(det => {{
+                                const [bx, by, bw, bh] = det.bbox;
+                                ctx.fillRect(bx, by, bw, bh);
+                                ctx.strokeRect(bx, by, bw, bh);
+                            }});
+                        }}
                     }}
                 }}
                 requestAnimationFrame(renderLoop);
