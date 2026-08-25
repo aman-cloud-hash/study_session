@@ -9,21 +9,13 @@ import config
 def ensure_directories() -> None:
     """Create all required directories if they do not already exist."""
     directories = [
-        config.ASSETS_DIR,
-        config.SOUNDS_DIR,
+        config.AUDIO_DIR,
         config.MODELS_DIR,
         config.DATABASE_DIR,
         config.REPORTS_DIR,
     ]
     for directory in directories:
         directory.mkdir(parents=True, exist_ok=True)
-    
-    # Auto-generate sound files if missing
-    try:
-        from src.utils.generate_sounds import create_all_default_sounds
-        create_all_default_sounds()
-    except Exception as e:
-        print(f"[helpers] Warning generating sounds: {e}")
 
 
 def format_time(seconds: float) -> str:

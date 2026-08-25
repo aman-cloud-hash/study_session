@@ -38,10 +38,10 @@ class AlertManager:
         phone_offset = getattr(config, "PHONE_ALERT_START_OFFSET_SEC", 1.0)
 
         self._sound_paths: dict[str, Path] = {
-            "drowsiness": drowsiness_mp3 if drowsiness_mp3.exists() else (config.SOUNDS_DIR / config.SOUND_DROWSINESS),
-            "phone": phone_mp3 if phone_mp3.exists() else (config.SOUNDS_DIR / config.SOUND_PHONE),
-            "high_distraction": phone_mp3 if phone_mp3.exists() else (config.SOUNDS_DIR / config.SOUND_HIGH_DISTRACTION),
-            "session_complete": config.SOUNDS_DIR / config.SOUND_SESSION_COMPLETE,
+            "drowsiness": drowsiness_mp3,
+            "phone": phone_mp3,
+            "high_distraction": phone_mp3,
+            "session_complete": drowsiness_mp3,
         }
 
         self._offsets: dict[str, float] = {

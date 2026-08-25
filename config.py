@@ -12,8 +12,6 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 
-ASSETS_DIR = PROJECT_ROOT / "assets"
-SOUNDS_DIR = ASSETS_DIR / "sounds"
 AUDIO_DIR = PROJECT_ROOT / "audio"
 MODELS_DIR = PROJECT_ROOT / "models"
 DATABASE_DIR = PROJECT_ROOT / "database"
