@@ -929,17 +929,33 @@ elif st.session_state.current_page == "session":
                 }}
             }}
 
-            // 3. Periodic Ultra-Sensitive Phone Radar Scan (Every 100ms)
-            const targetClasses = ['cell phone', 'remote', 'laptop', 'telephone'];
+            let phoneLastSeenTime = 0;
+
+            // 3. Periodic Ultra-Sensitive Phone Radar Scan (Every 70ms with deep low-threshold candidate search)
+            const targetClasses = ['cell phone', 'remote', 'laptop', 'tablet', 'book', 'mouse', 'bottle', 'cup', 'hand', 'camera', 'telephone'];
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
-                        const predictions = await cocoModel.detect(video);
-                        phoneDetections = predictions.filter(p => targetClasses.includes(p.class) && p.score > 0.15);
-                        isPhoneDistraction = phoneDetections.length > 0;
+                        // Pass minScore=0.04 directly into model to prevent internal 0.50 cutoff
+                        const predictions = await cocoModel.detect(video, 40, 0.04);
+                        const matched = predictions.filter(p => {{
+                            if (targetClasses.includes(p.class) && p.score >= 0.06) {{
+                                return true;
+                            }}
+                            if (p.class !== 'person' && p.score >= 0.08) {{
+                                const [x, y, w, h] = p.bbox;
+                                const aspect = h / (w || 1);
+                                if ((aspect > 1.1 || aspect < 0.9) && w > 35 && h > 45) return true;
+                            }}
+                            return false;
+                        }});
+                        phoneDetections = matched;
+                        if (matched.length > 0) {{
+                            phoneLastSeenTime = performance.now();
+                        }}
                     }} catch (e) {{}}
                 }}
-            }}, 100);
+            }}, 70);
 
             // 4. Periodic FaceMesh Processing (Direct stream, zero hijacking)
             let isProcessingFace = false;
@@ -1062,7 +1078,10 @@ elif st.session_state.current_page == "session":
                 if (dt > 0) fps = Math.round(0.9 * fps + 0.1 * (1 / dt));
                 if (fpsBadge) fpsBadge.innerText = fps;
 
-                // Sync Distraction Audio & Visual Alerts
+                // Sync Distraction Audio & Visual Alerts (with 1.5s motion hold debounce)
+                const isPhoneActive = (now - phoneLastSeenTime) < 1500;
+                isPhoneDistraction = isPhoneActive;
+
                 if (isPhoneDistraction) {{
                     if (statusDot) statusDot.style.background = '#DC2626';
                     if (statusText) statusText.innerText = '🚨 PHONE DETECTED';
