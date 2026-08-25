@@ -712,6 +712,10 @@ elif st.session_state.current_page == "session":
                     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
                     color: #FFFFFF;
                 }}
+                select option {{
+                    background: #0F172A;
+                    color: #FFFFFF;
+                }}
             </style>
             <!-- Google MediaPipe FaceMesh & TensorFlow.js CDN -->
             <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
@@ -721,6 +725,19 @@ elif st.session_state.current_page == "session":
         </head>
         <body>
         <div style="background: #0B0E17; border: 1px solid #1E293B; border-radius: 18px; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+            <!-- Top Controls: Active Camera Switcher -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; background: rgba(15, 23, 42, 0.6); padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
+                <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: #94A3B8;">
+                    <span>📷 ACTIVE CAMERA:</span>
+                    <select id="cameraSwitcher" style="background: #1E293B; color: #F8FAFC; border: 1px solid #334155; border-radius: 8px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; outline: none;">
+                        <option value="">Detecting available cameras...</option>
+                    </select>
+                </div>
+                <div style="font-size: 11px; font-weight: 700; color: #10B981;">
+                    ⚡ <span id="fpsCount">60</span> FPS • <span id="aiModelStatus" style="color: #818CF8;">AI LOADING...</span>
+                </div>
+            </div>
+
             <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px;">
                 <!-- Left: 60 FPS Crystal Clear Video Canvas -->
                 <div style="position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #020617; border: 1px solid rgba(99, 102, 241, 0.3); aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">
@@ -731,11 +748,6 @@ elif st.session_state.current_page == "session":
                     <div id="statusBadge" style="position: absolute; top: 14px; left: 14px; background: rgba(12, 14, 22, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 6px 14px; display: flex; align-items: center; gap: 8px;">
                         <span id="statusDot" style="width: 10px; height: 10px; border-radius: 50%; background: #10B981; box-shadow: 0 0 10px #10B981;"></span>
                         <span id="statusText" style="font-size: 12px; font-weight: 800; color: #FFFFFF; letter-spacing: 0.5px;">STUDY SENTRY ACTIVE</span>
-                    </div>
-
-                    <!-- FPS Badge -->
-                    <div style="position: absolute; top: 14px; right: 14px; background: rgba(12, 14, 22, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 6px 12px; font-size: 11px; font-weight: 700; color: #10B981;">
-                        ⚡ <span id="fpsCount">60</span> FPS • <span id="aiModelStatus" style="color: #818CF8;">AI LOADING...</span>
                     </div>
 
                     <!-- Permission & Camera Launch Overlay -->
@@ -802,6 +814,7 @@ elif st.session_state.current_page == "session":
             const ctx = canvas ? canvas.getContext('2d') : null;
             const startOverlay = document.getElementById('camStartOverlay');
             const btnStart = document.getElementById('btnStartStream');
+            const cameraSwitcher = document.getElementById('cameraSwitcher');
             const statusDot = document.getElementById('statusDot');
             const statusText = document.getElementById('statusText');
             const eyeWarning = document.getElementById('eyeClosedWarning');
@@ -814,6 +827,7 @@ elif st.session_state.current_page == "session":
             const audioDrowsy = document.getElementById('audioDrowsy');
             const audioPhone = document.getElementById('audioPhone');
 
+            let currentStream = null;
             let sessionSeconds = {st.session_state.duration_min} * 60;
             let elapsed = 0;
             let currentScore = 100;
@@ -857,8 +871,8 @@ elif st.session_state.current_page == "session":
             if (window.cocoSsd) {{
                 cocoSsd.load().then(model => {{
                     cocoModel = model;
-                    if (aiStatusBadge) aiStatusBadge.innerText = 'AI READY';
-                    console.log("[AI Sentry] COCO-SSD Loaded!");
+                    if (aiStatusBadge) aiStatusBadge.innerText = 'AI ACTIVE';
+                    console.log("[AI Sentry] COCO-SSD Ultra-Sensitivity Model Ready!");
                 }}).catch(e => console.error("COCO-SSD error:", e));
             }}
 
@@ -870,8 +884,8 @@ elif st.session_state.current_page == "session":
                 faceMesh.setOptions({{
                     maxNumFaces: 1,
                     refineLandmarks: true,
-                    minDetectionConfidence: 0.5,
-                    minTrackingConfidence: 0.5
+                    minDetectionConfidence: 0.4,
+                    minTrackingConfidence: 0.4
                 }});
                 faceMesh.onResults(onFaceMeshResults);
             }}
@@ -901,7 +915,8 @@ elif st.session_state.current_page == "session":
                 if (avgEAR < 0.22) {{
                     if (!eyesClosedStart) eyesClosedStart = now;
                     eyeClosedTimer = (now - eyesClosedStart) / 1000;
-                    if (eyeClosedTimer >= 1.2) {{
+                    // Trigger sound after 3 full seconds of closed eyes
+                    if (eyeClosedTimer >= 3.0) {{
                         isDrowsyDistraction = true;
                     }}
                 }} else {{
@@ -911,31 +926,68 @@ elif st.session_state.current_page == "session":
                 }}
             }}
 
-            // 3. Periodic Phone Radar Scan (Every 300ms)
+            // 3. Periodic Ultra-Sensitive Phone Radar Scan (Every 100ms)
+            const targetClasses = ['cell phone', 'remote', 'laptop', 'telephone'];
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
                         const predictions = await cocoModel.detect(video);
-                        phoneDetections = predictions.filter(p => p.class === 'cell phone' && p.score > 0.40);
+                        phoneDetections = predictions.filter(p => targetClasses.includes(p.class) && p.score > 0.15);
                         isPhoneDistraction = phoneDetections.length > 0;
                     }} catch (e) {{}}
                 }}
-            }}, 300);
+            }}, 100);
 
-            // 4. Start Camera Stream
-            function startCamera() {{
+            // 4. Enumerate Cameras & Populate Switcher
+            async function updateCameraList() {{
+                try {{
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(d => d.kind === 'videoinput');
+                    if (cameraSwitcher && videoDevices.length > 0) {{
+                        cameraSwitcher.innerHTML = '';
+                        videoDevices.forEach((dev, idx) => {{
+                            const opt = document.createElement('option');
+                            opt.value = dev.deviceId;
+                            opt.text = dev.label || `Camera ${{idx + 1}}`;
+                            cameraSwitcher.appendChild(opt);
+                        }});
+                    }}
+                }} catch (e) {{
+                    console.error("Enumerate devices error:", e);
+                }}
+            }}
+
+            cameraSwitcher?.addEventListener('change', () => {{
+                const chosenId = cameraSwitcher.value;
+                if (chosenId) {{
+                    startCamera(chosenId);
+                }}
+            }});
+
+            // 5. Start Camera Stream
+            function startCamera(deviceId = null) {{
                 if (audioDrowsy) audioDrowsy.load();
                 if (audioPhone) audioPhone.load();
 
-                navigator.mediaDevices.getUserMedia({{
-                    video: {{ width: {{ ideal: 1280 }}, height: {{ ideal: 720 }}, frameRate: {{ ideal: 60 }} }},
+                if (currentStream) {{
+                    currentStream.getTracks().forEach(t => t.stop());
+                }}
+
+                const constraints = {{
+                    video: deviceId ? {{ deviceId: {{ exact: deviceId }}, width: {{ ideal: 1280 }}, height: {{ ideal: 720 }} }} 
+                                    : {{ width: {{ ideal: 1280 }}, height: {{ ideal: 720 }}, frameRate: {{ ideal: 60 }} }},
                     audio: false
-                }}).then(stream => {{
+                }};
+
+                navigator.mediaDevices.getUserMedia(constraints).then(stream => {{
+                    currentStream = stream;
                     if (video) {{
                         video.srcObject = stream;
                         video.play();
                     }}
                     if (startOverlay) startOverlay.style.display = 'none';
+
+                    updateCameraList();
 
                     // Connect video to MediaPipe Camera Utils
                     if (window.Camera && faceMesh) {{
@@ -954,7 +1006,7 @@ elif st.session_state.current_page == "session":
                 }});
             }}
 
-            btnStart?.addEventListener('click', startCamera);
+            btnStart?.addEventListener('click', () => startCamera());
 
             navigator.permissions?.query({{ name: 'camera' }}).then(res => {{
                 if (res.state === 'granted') {{
@@ -962,7 +1014,7 @@ elif st.session_state.current_page == "session":
                 }}
             }}).catch(() => {{}});
 
-            // 5. 60 FPS Telemetry, Audio Sync & Cyberpunk HUD Loop
+            // 6. 60 FPS Telemetry, Audio Sync & Cyberpunk HUD Loop
             let lastTime = performance.now();
             let fps = 60;
 
@@ -993,7 +1045,7 @@ elif st.session_state.current_page == "session":
                     if (statusText) statusText.innerText = '😴 DROWSINESS DETECTED';
                     if (eyeWarning) {{
                         eyeWarning.style.display = 'block';
-                        eyeWarning.innerText = `⚠️ WAKE UP! EYES CLOSED (${{eyeClosedTimer.toFixed(1)}}s)`;
+                        eyeWarning.innerText = `⚠️ WAKE UP! EYES CLOSED (${{eyeClosedTimer.toFixed(1)}}s / 3.0s)`;
                     }}
                     if (phoneWarning) phoneWarning.style.display = 'none';
                     if (focusStatusLabel) focusStatusLabel.innerText = 'Distraction: Drowsiness Alert';
@@ -1008,10 +1060,18 @@ elif st.session_state.current_page == "session":
                 }} else {{
                     if (statusDot) statusDot.style.background = '#10B981';
                     if (statusText) statusText.innerText = 'STUDY SENTRY ACTIVE';
-                    if (eyeWarning) eyeWarning.style.display = 'none';
                     if (phoneWarning) phoneWarning.style.display = 'none';
                     if (focusStatusLabel) focusStatusLabel.innerText = 'Status: Laser Focused';
                     currentScore = Math.min(100, currentScore + 0.02);
+
+                    if (eyeClosedTimer > 0.3) {{
+                        if (eyeWarning) {{
+                            eyeWarning.style.display = 'block';
+                            eyeWarning.innerText = `⚠️ Eyes Closed: ${{eyeClosedTimer.toFixed(1)}}s / 3.0s`;
+                        }}
+                    }} else {{
+                        if (eyeWarning) eyeWarning.style.display = 'none';
+                    }}
 
                     if (audioDrowsy && !audioDrowsy.paused) {{ audioDrowsy.pause(); audioDrowsy.currentTime = 0; }}
                     if (audioPhone && !audioPhone.paused) {{ audioPhone.pause(); audioPhone.currentTime = 0; }}
@@ -1041,8 +1101,8 @@ elif st.session_state.current_page == "session":
                         // Draw Bounding Boxes for detected phone
                         if (phoneDetections.length > 0) {{
                             ctx.strokeStyle = '#DC2626';
-                            ctx.fillStyle = 'rgba(220, 38, 38, 0.2)';
-                            ctx.lineWidth = 2;
+                            ctx.fillStyle = 'rgba(220, 38, 38, 0.25)';
+                            ctx.lineWidth = 3;
                             phoneDetections.forEach(det => {{
                                 const [bx, by, bw, bh] = det.bbox;
                                 ctx.fillRect(bx, by, bw, bh);
@@ -1059,7 +1119,7 @@ elif st.session_state.current_page == "session":
         </body>
         </html>
         """,
-        height=580,
+        height=620,
         scrolling=False,
     )
 
