@@ -941,10 +941,21 @@ elif st.session_state.current_page == "session":
                 }}
             }}, 100);
 
-            // 4. Enumerate Cameras & Live Switching Engine
+            // 4. Periodic FaceMesh Processing (Direct stream, zero hijacking)
+            let isProcessingFace = false;
+            setInterval(async () => {{
+                if (faceMesh && video && video.readyState >= 2 && !isProcessingFace) {{
+                    isProcessingFace = true;
+                    try {{
+                        await faceMesh.send({{ image: video }});
+                    }} catch (e) {{}}
+                    isProcessingFace = false;
+                }}
+            }}, 80);
+
+            // 5. Enumerate Cameras & Live Switching Engine
             let availableCameras = [];
             let activeDeviceId = null;
-            let mpCamera = null;
 
             async function updateCameraList(currentId = null) {{
                 try {{
@@ -988,7 +999,7 @@ elif st.session_state.current_page == "session":
                 }}
             }});
 
-            // 5. Start Camera Stream
+            // 6. Start Camera Stream
             async function startCamera(deviceId = null) {{
                 if (audioDrowsy) audioDrowsy.load();
                 if (audioPhone) audioPhone.load();
@@ -996,10 +1007,6 @@ elif st.session_state.current_page == "session":
                 if (currentStream) {{
                     currentStream.getTracks().forEach(t => t.stop());
                     currentStream = null;
-                }}
-                if (mpCamera) {{
-                    try {{ mpCamera.stop(); }} catch(e){{}}
-                    mpCamera = null;
                 }}
 
                 const constraints = {{
@@ -1019,18 +1026,6 @@ elif st.session_state.current_page == "session":
                     if (startOverlay) startOverlay.style.display = 'none';
 
                     await updateCameraList(activeDeviceId);
-
-                    // Connect video to MediaPipe Camera Utils
-                    if (window.Camera && faceMesh) {{
-                        mpCamera = new Camera(video, {{
-                            onFrame: async () => {{
-                                await faceMesh.send({{ image: video }});
-                            }},
-                            width: 640,
-                            height: 480
-                        }});
-                        mpCamera.start();
-                    }}
                 }} catch (err) {{
                     console.error("Camera start error:", err);
                     if (deviceId) {{
