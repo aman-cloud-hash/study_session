@@ -117,6 +117,41 @@ class DatabaseManager:
         conn.commit()
         return cursor.lastrowid  # type: ignore[return-value]
 
+    def update_session(self, session_id: int, data: dict[str, Any]) -> None:
+        """
+        Update an existing session row by ``session_id``.
+        """
+        conn = self._connect()
+        payload = {
+            "session_id": session_id,
+            "end_time": data.get("end_time", datetime.now().strftime("%H:%M:%S")),
+            "total_duration": float(data.get("total_duration", 0.0)),
+            "focused_duration": float(data.get("focused_duration", 0.0)),
+            "distracted_duration": float(data.get("distracted_duration", 0.0)),
+            "phone_duration": float(data.get("phone_duration", 0.0)),
+            "drowsiness_duration": float(data.get("drowsiness_duration", 0.0)),
+            "phone_events": int(data.get("phone_events", 0)),
+            "drowsiness_events": int(data.get("drowsiness_events", 0)),
+            "focus_score": float(data.get("focus_score", 0.0)),
+        }
+        conn.execute(
+            """
+            UPDATE sessions SET
+                end_time = :end_time,
+                total_duration = :total_duration,
+                focused_duration = :focused_duration,
+                distracted_duration = :distracted_duration,
+                phone_duration = :phone_duration,
+                drowsiness_duration = :drowsiness_duration,
+                phone_events = :phone_events,
+                drowsiness_events = :drowsiness_events,
+                focus_score = :focus_score
+            WHERE session_id = :session_id;
+            """,
+            payload,
+        )
+        conn.commit()
+
     def get_all_sessions(self) -> list[dict[str, Any]]:
         """Return every session as a list of dicts, newest first."""
         conn = self._connect()

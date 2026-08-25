@@ -420,9 +420,13 @@ elif st.session_state.current_page == "session":
                 try:
                     db = DatabaseManager()
                     db.initialise()
-                    db.save_session(st.session_state.active_session_data)
+                    if st.session_state.get("active_session_db_id"):
+                        db.update_session(st.session_state.active_session_db_id, st.session_state.active_session_data)
+                    else:
+                        db.save_session(st.session_state.active_session_data)
                     st.session_state.last_session_stats = st.session_state.active_session_data
                     st.session_state.active_session_data = None
+                    st.session_state.active_session_db_id = None
                 except Exception as e:
                     print(f"[Save on Stop Error] {e}")
             st.session_state.current_page = "completion"
@@ -463,6 +467,8 @@ elif st.session_state.current_page == "session":
     snapshot_taken = False
     snapshot_file_path = None
     session_saved = False
+    session_db_id = None
+    st.session_state.active_session_db_id = None
     frame_count = 0
     elapsed = 0.0
 
@@ -477,17 +483,6 @@ elif st.session_state.current_page == "session":
             frame_count += 1
             elapsed = time.time() - start_time
             remaining = max(0, target_sec - elapsed)
-
-            # 📸 Automatic Identity Snapshot Capture (~1-2 sec after entry)
-            if not snapshot_taken and (elapsed >= 1.0 or frame_count >= 15):
-                try:
-                    snap_name = f"snap_{st.session_state.student_name}_{int(time.time())}.jpg"
-                    snap_full_path = config.SNAPSHOTS_DIR / snap_name
-                    cv2.imwrite(str(snap_full_path), frame)
-                    snapshot_file_path = str(snap_full_path)
-                    snapshot_taken = True
-                except Exception as e:
-                    print(f"[Snapshot Error] {e}")
 
             # Compute FPS
             now = time.time()
@@ -520,6 +515,36 @@ elif st.session_state.current_page == "session":
             # 5. Draw Cyberpunk Reticle Bounding Box
             if phone_data.get("phone_detected", False) and phone_data.get("detections"):
                 frame = phone_detector.draw_detections(frame, phone_data["detections"])
+
+            score_val = engine_data.get("focus_score", 100.0)
+
+            # 📸 3-SECOND AUTOMATIC IDENTITY SNAPSHOT & INSTANT DATABASE PERSISTENCE
+            if not snapshot_taken and (elapsed >= 3.0 or frame_count >= 30):
+                try:
+                    snap_name = f"snap_{st.session_state.student_name}_{int(time.time())}.jpg"
+                    snap_full_path = config.SNAPSHOTS_DIR / snap_name
+                    cv2.imwrite(str(snap_full_path), frame)
+                    snapshot_file_path = str(snap_full_path)
+                    snapshot_taken = True
+
+                    # ⚡ Save to SQLite immediately at 3 seconds!
+                    db_init = DatabaseManager()
+                    db_init.initialise()
+                    session_db_id = db_init.save_session({
+                        "student_name": st.session_state.student_name,
+                        "total_duration": elapsed,
+                        "focused_duration": engine_data.get("focused_duration", 0.0),
+                        "distracted_duration": engine_data.get("distracted_duration", 0.0),
+                        "phone_duration": engine_data.get("phone_duration", 0.0),
+                        "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
+                        "phone_events": engine_data.get("phone_events", 0),
+                        "drowsiness_events": engine_data.get("drowsiness_events", 0),
+                        "focus_score": score_val,
+                        "snapshot_path": snapshot_file_path,
+                    })
+                    st.session_state.active_session_db_id = session_db_id
+                except Exception as e:
+                    print(f"[Snapshot & Auto-Save Error] {e}")
 
             # 6. Render Cyberpunk Glass HUD
             h, w = frame.shape[:2]
@@ -576,8 +601,6 @@ elif st.session_state.current_page == "session":
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             video_feed_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
 
-            # Update Right Column Telemetry
-            score_val = engine_data.get("focus_score", 100.0)
             score_cls = "gauge-val-emerald" if score_val >= 80 else ("gauge-val-amber" if score_val >= 60 else "gauge-val-red")
 
             # 💾 Continuous Session State Cache
@@ -643,7 +666,10 @@ elif st.session_state.current_page == "session":
             # Auto-save when target duration finishes
             if remaining <= 0:
                 if st.session_state.active_session_data:
-                    db.save_session(st.session_state.active_session_data)
+                    if session_db_id:
+                        db.update_session(session_db_id, st.session_state.active_session_data)
+                    else:
+                        db.save_session(st.session_state.active_session_data)
                     st.session_state.last_session_stats = st.session_state.active_session_data
                     st.session_state.active_session_data = None
                 session_saved = True
@@ -657,12 +683,16 @@ elif st.session_state.current_page == "session":
         alert_manager.stop_all()
         face_detector.close()
 
-        # Always save session on exit if elapsed >= 1.0s and not already saved
+        # Always update/save session on exit if elapsed >= 1.0s and not already saved
         if elapsed >= 1.0 and not session_saved and "active_session_data" in st.session_state and st.session_state.active_session_data:
             try:
                 db_final = DatabaseManager()
                 db_final.initialise()
-                db_final.save_session(st.session_state.active_session_data)
+                target_id = session_db_id or st.session_state.get("active_session_db_id")
+                if target_id:
+                    db_final.update_session(target_id, st.session_state.active_session_data)
+                else:
+                    db_final.save_session(st.session_state.active_session_data)
                 st.session_state.last_session_stats = st.session_state.active_session_data
                 st.session_state.active_session_data = None
                 session_saved = True
