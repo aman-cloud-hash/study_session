@@ -159,39 +159,44 @@ AI Study Focus Copilot
 
 ---
 
-## 🚀 Quick Start & Installation
+## 🚀 Quick Start & Running Options
 
-### Prerequisites
-- **Python 3.10 to 3.14** installed.
-- A functional **Webcam / USB Camera**.
-
-### 1. Clone the Repository
+### 1. Set Up Environment
 ```bash
-git clone https://github.com/yourusername/study_session.git
+git clone https://github.com/aman-cloud-hash/study_session.git
 cd study_session
-```
-
-### 2. Set Up Virtual Environment (Recommended)
-```bash
-# Create virtual environment
 python -m venv venv
-
-# Activate on Windows:
+# Windows:
 .\venv\Scripts\activate
-
-# Activate on macOS / Linux:
+# Linux/macOS:
 source venv/bin/activate
-```
-
-### 3. Install Dependencies
-```bash
 pip install -r requirements.txt
 ```
 
-### 4. Launch the Application
+---
+
+### 💻 Option A: Run Desktop Application (CustomTkinter)
 ```bash
 python main.py
 ```
+*Launches high-performance desktop window with direct DirectShow camera streaming, hardware acceleration, and Pygame sound engine.*
+
+---
+
+### 🌐 Option B: Run Streamlit Web Application (WebRTC)
+```bash
+streamlit run app_streamlit.py
+```
+*Opens in your browser at `http://localhost:8501`. Enables in-browser webcam streaming via WebRTC, HTML5 audio, and live focus metrics.*
+
+---
+
+### ☁️ How to Deploy on Streamlit Cloud (100% Free):
+1. Push your repository to GitHub (`main` branch).
+2. Go to [share.streamlit.io](https://share.streamlit.io/) and log in with GitHub.
+3. Click **"New app"** and select repository `study_session`.
+4. Set Main file path: `app_streamlit.py`.
+5. Click **Deploy!** 🚀 Streamlit Cloud will automatically install `requirements.txt` and launch your live Web App URL.
 
 ---
 
