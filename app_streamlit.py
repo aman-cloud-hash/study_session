@@ -945,62 +945,31 @@ elif st.session_state.current_page == "session":
                 }}
             }}
 
-            const skinProbeCanvas = document.createElement('canvas');
-            skinProbeCanvas.width = 32;
-            skinProbeCanvas.height = 32;
-            const skinProbeCtx = skinProbeCanvas.getContext('2d', {{ willReadFrequently: true }});
-
-            function isBareSkinOrHand(videoEl, bbox) {{
-                try {{
-                    const [bx, by, bw, bh] = bbox;
-                    if (bw <= 0 || bh <= 0 || !videoEl || !videoEl.videoWidth) return false;
-                    skinProbeCtx.drawImage(videoEl, Math.max(0, bx), Math.max(0, by), bw, bh, 0, 0, 32, 32);
-                    const imgData = skinProbeCtx.getImageData(0, 0, 32, 32).data;
-                    let skinCount = 0;
-                    const total = 32 * 32;
-                    for (let i = 0; i < imgData.length; i += 4) {{
-                        const r = imgData[i];
-                        const g = imgData[i + 1];
-                        const b = imgData[i + 2];
-                        const maxVal = Math.max(r, g, b);
-                        const minVal = Math.min(r, g, b);
-                        // Human skin chrominance condition in RGB
-                        if (r > 75 && g > 35 && b > 20 && (maxVal - minVal) > 12 && r > g && r > b) {{
-                            skinCount++;
-                        }}
-                    }}
-                    // Only reject if box is pure bare hand/fingers (> 70% skin)
-                    return (skinCount / total) > 0.70;
-                }} catch(e) {{
-                    return false;
-                }}
-            }}
-
             let phoneConsecutiveHits = 0;
             let phoneLastSeenTime = -999999;
 
-            // 3. Periodic Phone Radar Scan (High Sensitivity for Real Phones, Zero Hand False Positives)
+            // 3. Periodic Phone Radar Scan (High Sensitivity for All Phones & Cases, Rejects Finger Strips)
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
-                        const predictions = await cocoModel.detect(video, 20, 0.25);
+                        const predictions = await cocoModel.detect(video, 20, 0.20);
                         const matched = predictions.filter(p => {{
-                            if (p.class !== 'cell phone') return false;
-                            if (p.score < 0.35) return false; // Sensitive to moving, tilted & silver phones
+                            // Recognize cell phone and remote classes from COCO-SSD
+                            const isPhone = (p.class === 'cell phone' || p.class === 'remote');
+                            if (!isPhone) return false;
+                            if (p.score < 0.25) return false;
+
                             const [x, y, w, h] = p.bbox;
                             const maxDim = Math.max(w, h);
                             const minDim = Math.min(w, h);
                             const aspect = maxDim / Math.max(1, minDim);
                             const area = w * h;
 
-                            // 1. Minimum reasonable phone size
-                            if (maxDim < 45 || minDim < 20 || area < 1200) return false;
+                            // 1. Filter out tiny artifacts / single finger width
+                            if (minDim < 28 || maxDim < 45 || area < 1000) return false;
 
-                            // 2. Reject only extreme needle/line shapes
-                            if (aspect > 3.2) return false;
-
-                            // 3. Reject if the bounding box is pure bare skin/fingers/palm (>70% skin)
-                            if (isBareSkinOrHand(video, p.bbox)) return false;
+                            // 2. Filter out tall narrow finger gestures (aspect > 2.8)
+                            if (aspect > 2.8) return false;
 
                             return true;
                         }});
@@ -1015,7 +984,7 @@ elif st.session_state.current_page == "session":
                         }}
                     }} catch (e) {{}}
                 }}
-            }}, 80);
+            }}, 60);
 
             // 4. Periodic FaceMesh Processing (Direct stream, zero hijacking)
             let isProcessingFace = false;
