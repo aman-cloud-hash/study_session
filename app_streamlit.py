@@ -416,6 +416,15 @@ elif st.session_state.current_page == "session":
         st.markdown(f"<p style='color: #64748B; margin: 0;'>Target: {st.session_state.duration_min}m • Hardware Camera #{st.session_state.cam_index}</p>", unsafe_allow_html=True)
     with header_col2:
         if st.button("⏹️  END SESSION", use_container_width=True, type="secondary"):
+            if "active_session_data" in st.session_state and st.session_state.active_session_data:
+                try:
+                    db = DatabaseManager()
+                    db.initialise()
+                    db.save_session(st.session_state.active_session_data)
+                    st.session_state.last_session_stats = st.session_state.active_session_data
+                    st.session_state.active_session_data = None
+                except Exception as e:
+                    print(f"[Save on Stop Error] {e}")
             st.session_state.current_page = "completion"
             st.rerun()
 
@@ -571,6 +580,20 @@ elif st.session_state.current_page == "session":
             score_val = engine_data.get("focus_score", 100.0)
             score_cls = "gauge-val-emerald" if score_val >= 80 else ("gauge-val-amber" if score_val >= 60 else "gauge-val-red")
 
+            # 💾 Continuous Session State Cache
+            st.session_state.active_session_data = {
+                "student_name": st.session_state.student_name,
+                "total_duration": elapsed,
+                "focused_duration": engine_data.get("focused_duration", 0.0),
+                "distracted_duration": engine_data.get("distracted_duration", 0.0),
+                "phone_duration": engine_data.get("phone_duration", 0.0),
+                "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
+                "phone_events": engine_data.get("phone_events", 0),
+                "drowsiness_events": engine_data.get("drowsiness_events", 0),
+                "focus_score": score_val,
+                "snapshot_path": snapshot_file_path,
+            }
+
             gauge_box.markdown(
                 f"""
                 <div class="gauge-card">
@@ -619,19 +642,10 @@ elif st.session_state.current_page == "session":
 
             # Auto-save when target duration finishes
             if remaining <= 0:
-                st.session_state.last_session_stats = {
-                    "student_name": st.session_state.student_name,
-                    "total_duration": elapsed,
-                    "focused_duration": engine_data.get("focused_duration", 0.0),
-                    "distracted_duration": engine_data.get("distracted_duration", 0.0),
-                    "phone_duration": engine_data.get("phone_duration", 0.0),
-                    "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
-                    "phone_events": engine_data.get("phone_events", 0),
-                    "drowsiness_events": engine_data.get("drowsiness_events", 0),
-                    "focus_score": score_val,
-                    "snapshot_path": snapshot_file_path,
-                }
-                db.save_session(st.session_state.last_session_stats)
+                if st.session_state.active_session_data:
+                    db.save_session(st.session_state.active_session_data)
+                    st.session_state.last_session_stats = st.session_state.active_session_data
+                    st.session_state.active_session_data = None
                 session_saved = True
                 st.session_state.current_page = "completion"
                 st.rerun()
@@ -644,22 +658,16 @@ elif st.session_state.current_page == "session":
         face_detector.close()
 
         # Always save session on exit if elapsed >= 1.0s and not already saved
-        if elapsed >= 1.0 and not session_saved:
-            save_payload = {
-                "student_name": st.session_state.student_name,
-                "total_duration": elapsed,
-                "focused_duration": engine_data.get("focused_duration", 0.0) if 'engine_data' in locals() else elapsed,
-                "distracted_duration": engine_data.get("distracted_duration", 0.0) if 'engine_data' in locals() else 0.0,
-                "phone_duration": engine_data.get("phone_duration", 0.0) if 'engine_data' in locals() else 0.0,
-                "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0) if 'engine_data' in locals() else 0.0,
-                "phone_events": engine_data.get("phone_events", 0) if 'engine_data' in locals() else 0,
-                "drowsiness_events": engine_data.get("drowsiness_events", 0) if 'engine_data' in locals() else 0,
-                "focus_score": score_val if 'score_val' in locals() else 100.0,
-                "snapshot_path": snapshot_file_path,
-            }
-            db.save_session(save_payload)
-            st.session_state.last_session_stats = save_payload
-            session_saved = True
+        if elapsed >= 1.0 and not session_saved and "active_session_data" in st.session_state and st.session_state.active_session_data:
+            try:
+                db_final = DatabaseManager()
+                db_final.initialise()
+                db_final.save_session(st.session_state.active_session_data)
+                st.session_state.last_session_stats = st.session_state.active_session_data
+                st.session_state.active_session_data = None
+                session_saved = True
+            except Exception as e:
+                print(f"[Finally Save Error] {e}")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
