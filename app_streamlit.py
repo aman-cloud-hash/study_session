@@ -442,12 +442,12 @@ st.markdown(
 
 ensure_directories()
 
-# ─── Initialize State Router & Camera Detection ──────────────────────────────
+# ─── Initialize State Router & Cloud Safe Defaults ───────────────────────────
 if "detected_cameras" not in st.session_state:
-    try:
-        st.session_state.detected_cameras = detect_available_cameras(max_tested=4)
-    except Exception:
-        st.session_state.detected_cameras = [{"index": 0, "name": "Camera 0 [Default]"}]
+    st.session_state.detected_cameras = [
+        {"index": 0, "name": "WebRTC Browser Camera (Mobile / Desktop)"},
+        {"index": 1, "name": "Camera 0 [Hardware USB]"}
+    ]
 
 if "current_page" not in st.session_state:
     st.session_state.current_page = "home"  # 'home', 'session', 'completion', 'history', 'settings'
@@ -479,17 +479,21 @@ with nav_brand_col:
 
 with nav_tabs_col:
     nav_map = {"🏠 Home": "home", "📊 History": "history", "⚙️ Settings": "settings"}
-    current_label = next((k for k, v in nav_map.items() if v == st.session_state.current_page), "🏠 Home")
+    current_label = next((k for k, v in nav_map.items() if v == st.session_state.current_page), None)
     
-    selected_nav = st.segmented_control(
+    def on_nav_change():
+        chosen = st.session_state.get("top_nav_bar")
+        if chosen and chosen in nav_map:
+            st.session_state.current_page = nav_map[chosen]
+
+    st.segmented_control(
         "Navigation Tabs",
         options=list(nav_map.keys()),
         default=current_label,
-        label_visibility="collapsed"
+        key="top_nav_bar",
+        on_change=on_nav_change,
+        label_visibility="collapsed",
     )
-    if selected_nav and nav_map.get(selected_nav) != st.session_state.current_page:
-        st.session_state.current_page = nav_map[selected_nav]
-        st.rerun()
 
 st.markdown("<hr style='border: 0; height: 1px; background: #1F2338; margin: 12px 0 24px 0;'>", unsafe_allow_html=True)
 
