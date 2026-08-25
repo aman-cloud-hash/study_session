@@ -768,33 +768,10 @@ elif st.session_state.current_page == "session":
                 """,
                 unsafe_allow_html=True,
             )
-            
-            st.markdown(
-                """
-                <div class="card-surface">
-                    <div class="card-title">⚡ Real-Time Vision Telemetry</div>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 8px;">
-                        <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
-                            <div style="font-size: 10px; color: #64748B; font-weight: 700;">EYE SENSITIVITY</div>
-                            <div style="font-size: 15px; font-weight: 800; color: #10B981;">1.2s Fast Trigger</div>
-                        </div>
-                        <div style="background: rgba(15, 23, 42, 0.6); padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.06);">
-                            <div style="font-size: 10px; color: #64748B; font-weight: 700;">PHONE RADAR</div>
-                            <div style="font-size: 15px; font-weight: 800; color: #818CF8;">YOLOv8 Active</div>
-                        </div>
-                    </div>
-                    <div style="margin-top: 10px; font-size: 11px; color: #94A3B8;">
-                        • Cyberpunk HUD overlay renders live 30 FPS stats with glowing bounding boxes.<br>
-                        • 3-Second stealth snapshot automatically verifies session start into SQLite DB.
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-        else:
-            gauge_box = st.empty()
-            clock_box = st.empty()
-            telemetry_box = st.empty()
+
+        gauge_box = st.empty()
+        clock_box = st.empty()
+        telemetry_box = st.empty()
 
     # Local DirectShow Fallback Loop if user explicitly selected local hardware device on desktop
     if not is_webrtc_mode:
