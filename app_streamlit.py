@@ -388,29 +388,38 @@ if st.session_state.current_page == "home":
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
         # Camera Selector with Auto-Detection & Scan
-        st.markdown('<div class="section-label">ACTIVE CAMERA DEVICE</div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-label">ACTIVE CAMERA DEVICE & MODE</div>', unsafe_allow_html=True)
         cam_col1, cam_col2 = st.columns([3.2, 1])
 
-        cam_names = [c["name"] for c in st.session_state.detected_cameras]
-        # Find current index
-        current_cam_name = next((c["name"] for c in st.session_state.detected_cameras if c["index"] == st.session_state.cam_index), cam_names[0])
+        available_modes = [
+            {"id": "webrtc", "name": "🌐 Browser WebRTC Camera (Cloud / Mobile / Desktop)", "is_webrtc": True, "index": 0},
+            {"id": "dshow_0", "name": "💻 Local USB Camera 0 (DirectShow Native)", "is_webrtc": False, "index": 0},
+            {"id": "dshow_1", "name": "💻 Local USB Camera 1 (External WebCam)", "is_webrtc": False, "index": 1},
+        ]
+        mode_names = [m["name"] for m in available_modes]
+        
+        cur_mode_name = st.session_state.get("cam_mode_label", mode_names[0])
+        if cur_mode_name not in mode_names:
+            cur_mode_name = mode_names[0]
 
         with cam_col1:
             selected_cam_name = st.selectbox(
                 "Active Camera Device",
-                options=cam_names,
-                index=cam_names.index(current_cam_name),
+                options=mode_names,
+                index=mode_names.index(cur_mode_name),
                 label_visibility="collapsed",
             )
-            # Update selected index
-            for c in st.session_state.detected_cameras:
-                if c["name"] == selected_cam_name:
-                    st.session_state.cam_index = c["index"]
+            for m in available_modes:
+                if m["name"] == selected_cam_name:
+                    st.session_state.is_webrtc = m["is_webrtc"]
+                    st.session_state.cam_index = m["index"]
+                    st.session_state.cam_mode_label = m["name"]
                     break
 
         with cam_col2:
             if st.button("🔄 Scan", use_container_width=True):
                 st.session_state.detected_cameras = detect_available_cameras(max_tested=4)
+                st.toast("✅ Camera scan completed!")
                 st.rerun()
 
         # Privacy & Policy Checkbox
@@ -466,14 +475,163 @@ if st.session_state.current_page == "home":
         )
 
 
+# ─── WebRTC Video Processor for Cloud Web Streaming ──────────────────────────
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+import av
+
+RTC_CONFIG = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
+class WebRTCVisionProcessor:
+    def __init__(self):
+        self.face_detector = FaceMeshDetector()
+        self.eye_detector = EyeDetector()
+        self.phone_detector = PhoneDetector()
+        self.distraction_engine = DistractionEngine()
+        self.alert_manager = AlertManager()
+        self.student_name = "Student"
+        self.duration_min = 25
+        self.start_time = time.time()
+        self.snapshot_taken = False
+        self.session_db_id = None
+        self.snapshot_file_path = None
+        self.latest_engine_data = {}
+        self.latest_eye_data = {}
+        self.latest_phone_data = {}
+        self.latest_fps = 30.0
+        self.prev_time = time.time()
+        self.frame_count = 0
+        self.elapsed = 0.0
+
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_ndarray(format="bgr24")
+        img = cv2.flip(img, 1)
+        self.frame_count += 1
+        self.elapsed = time.time() - self.start_time
+
+        # Calculate FPS
+        now = time.time()
+        dt = now - self.prev_time
+        self.prev_time = now
+        if dt > 0:
+            self.latest_fps = 0.9 * self.latest_fps + 0.1 * (1.0 / dt)
+
+        # 1. Face & Eye Tracking
+        face_results, face_count = self.face_detector.process(img)
+        if face_count > 0:
+            eye_data = self.eye_detector.detect_eye_state_from_face(img, face_results)
+        else:
+            eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
+
+        # 2. YOLO Phone Radar
+        phone_data = self.phone_detector.detect(img)
+
+        # 3. Decision Engine
+        engine_data = self.distraction_engine.update(
+            face_count=face_count,
+            eye_status=eye_data.get("eye_status", "UNKNOWN"),
+            phone_detected=phone_data.get("phone_detected", False),
+        )
+
+        # 4. Instant State-Based Audio Trigger
+        target_alert = engine_data.get("target_alert")
+        self.alert_manager.sync_alert_state(target_alert)
+
+        # 5. Draw Cyberpunk Reticle Bounding Box
+        if phone_data.get("phone_detected", False) and phone_data.get("detections"):
+            img = self.phone_detector.draw_detections(img, phone_data["detections"])
+
+        score_val = engine_data.get("focus_score", 100.0)
+
+        # 📸 3-SECOND AUTOMATIC IDENTITY SNAPSHOT & INSTANT DATABASE PERSISTENCE
+        if not self.snapshot_taken and (self.elapsed >= 3.0 or self.frame_count >= 30):
+            try:
+                snap_name = f"snap_{self.student_name}_{int(time.time())}.jpg"
+                snap_full_path = config.SNAPSHOTS_DIR / snap_name
+                cv2.imwrite(str(snap_full_path), img)
+                self.snapshot_file_path = str(snap_full_path)
+                self.snapshot_taken = True
+
+                db_init = DatabaseManager()
+                db_init.initialise()
+                self.session_db_id = db_init.save_session({
+                    "student_name": self.student_name,
+                    "total_duration": self.elapsed,
+                    "focused_duration": engine_data.get("focused_duration", 0.0),
+                    "distracted_duration": engine_data.get("distracted_duration", 0.0),
+                    "phone_duration": engine_data.get("phone_duration", 0.0),
+                    "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
+                    "phone_events": engine_data.get("phone_events", 0),
+                    "drowsiness_events": engine_data.get("drowsiness_events", 0),
+                    "focus_score": score_val,
+                    "snapshot_path": self.snapshot_file_path,
+                })
+            except Exception as e:
+                print(f"[WebRTC Snapshot Error] {e}")
+
+        # 6. Render Cyberpunk Glass HUD Overlay
+        h, w = img.shape[:2]
+        state = engine_data.get("current_state", DistractionState.FOCUSED)
+        if state == DistractionState.FOCUSED:
+            theme_col = (130, 210, 30)
+            state_lbl = "FOCUSED"
+        elif state == DistractionState.PHONE_DISTRACTION:
+            theme_col = (40, 60, 240)
+            state_lbl = "PHONE DETECTED"
+        elif state == DistractionState.DROWSY:
+            theme_col = (30, 160, 255)
+            state_lbl = "DROWSINESS DETECTED"
+        elif state == DistractionState.HIGH_DISTRACTION:
+            theme_col = (20, 20, 255)
+            state_lbl = "CRITICAL DISTRACTION"
+        elif state == DistractionState.NO_FACE:
+            theme_col = (160, 160, 160)
+            state_lbl = "NO FACE DETECTED"
+        else:
+            theme_col = (140, 140, 140)
+            state_lbl = "STUDY SENTRY"
+
+        overlay = img.copy()
+        cv2.rectangle(overlay, (14, 14), (250, 50), (12, 14, 22), -1)
+        cv2.circle(overlay, (32, 32), 6, theme_col, -1)
+        cv2.putText(overlay, state_lbl, (48, 37), cv2.FONT_HERSHEY_DUPLEX, 0.48, (240, 245, 255), 1, cv2.LINE_AA)
+
+        audio_on = self.alert_manager.is_playing
+        audio_x = max(14, w - 144)
+        audio_col = (40, 60, 240) if audio_on else (120, 180, 40)
+        cv2.rectangle(overlay, (audio_x, 14), (w - 14, 50), (12, 14, 22), -1)
+        cv2.circle(overlay, (audio_x + 18, 32), 5, audio_col, -1)
+        cv2.putText(overlay, "AUDIO ON" if audio_on else "AUDIO OFF", (audio_x + 32, 37), cv2.FONT_HERSHEY_DUPLEX, 0.46, (220, 225, 240), 1, cv2.LINE_AA)
+
+        eye_dur = engine_data.get("eye_closed_duration", 0.0)
+        if eye_dur > 0 and eye_data.get("eye_status") == "CLOSED":
+            prog = min(1.0, eye_dur / max(0.1, config.EYE_CLOSED_DURATION_THRESHOLD))
+            cv2.rectangle(overlay, (14, 58), (234, 66), (20, 20, 30), -1)
+            fill_w = int(220 * prog)
+            if fill_w > 0:
+                cv2.rectangle(overlay, (14, 58), (14 + fill_w, 66), (30, 160, 255), -1)
+            cv2.putText(overlay, f"Eyes Closed: {eye_dur:.1f}s", (244, 65), cv2.FONT_HERSHEY_DUPLEX, 0.40, (240, 240, 255), 1, cv2.LINE_AA)
+
+        cv2.addWeighted(overlay, 0.85, img, 0.15, 0, img)
+        cv2.rectangle(img, (14, 14), (250, 50), (50, 55, 75), 1)
+        cv2.rectangle(img, (audio_x, 14), (w - 14, 50), (50, 55, 75), 1)
+
+        self.latest_engine_data = engine_data
+        self.latest_eye_data = eye_data
+        self.latest_phone_data = phone_data
+
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+
 # ═════════════════════════════════════════════════════════════════════════════
-# 🎥 SCREEN 2: LIVE MISSION CONTROL (Exact Desktop SessionScreen Match)
+# 🎥 SCREEN 2: LIVE MISSION CONTROL (Dual Engine: WebRTC Cloud & DirectShow)
 # ═════════════════════════════════════════════════════════════════════════════
 elif st.session_state.current_page == "session":
     header_col1, header_col2 = st.columns([3, 1])
     with header_col1:
         st.markdown(f"<h2 style='margin: 0; color: #FFFFFF;'>🔴 Live Vision Sentry • <span style='color: #818CF8;'>{st.session_state.student_name}</span></h2>", unsafe_allow_html=True)
-        st.markdown(f"<p style='color: #64748B; margin: 0;'>Target: {st.session_state.duration_min}m • Hardware Camera #{st.session_state.cam_index}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #64748B; margin: 0;'>Target: {st.session_state.duration_min}m • Mode: {st.session_state.get('cam_mode_label', 'Browser WebRTC Live')}</p>", unsafe_allow_html=True)
     with header_col2:
         if st.button("⏹️  END SESSION", use_container_width=True, type="secondary"):
             if "active_session_data" in st.session_state and st.session_state.active_session_data:
@@ -496,268 +654,232 @@ elif st.session_state.current_page == "session":
 
     col_video, col_dash = st.columns([3, 2], gap="large")
 
+    # Cloud WebRTC Streaming Engine (for Streamlit Cloud & Mobile browsers)
+    is_webrtc_mode = st.session_state.get("is_webrtc", True)
+
     with col_video:
-        video_feed_placeholder = st.empty()
-        st.caption("⚡ DirectShow 30 FPS Stream • Processed in local volatile memory. 100% Privacy.")
+        if is_webrtc_mode:
+            st.caption("⚡ WebRTC Real-Time Camera Stream • Neural AI Inference running locally.")
+            ctx = webrtc_streamer(
+                key="study-focus-sentry",
+                mode=WebRtcMode.SENDRECV,
+                rtc_configuration=RTC_CONFIG,
+                video_processor_factory=WebRTCVisionProcessor,
+                media_stream_constraints={"video": True, "audio": False},
+                async_processing=True,
+            )
+            if ctx.video_processor:
+                ctx.video_processor.student_name = st.session_state.student_name
+                ctx.video_processor.duration_min = st.session_state.duration_min
+        else:
+            video_feed_placeholder = st.empty()
+            st.caption("⚡ DirectShow 30 FPS Stream • Processed in local volatile memory.")
 
     with col_dash:
         gauge_box = st.empty()
         clock_box = st.empty()
         telemetry_box = st.empty()
 
-    # Initialize Vision & Audio Pipeline
-    face_detector = FaceMeshDetector()
-    eye_detector = EyeDetector()
-    phone_detector = PhoneDetector()
-    distraction_engine = DistractionEngine()
-    alert_manager = AlertManager()
-    db = DatabaseManager()
+    # Local DirectShow Fallback Loop if user explicitly selected local hardware device on desktop
+    if not is_webrtc_mode:
+        face_detector = FaceMeshDetector()
+        eye_detector = EyeDetector()
+        phone_detector = PhoneDetector()
+        distraction_engine = DistractionEngine()
+        alert_manager = AlertManager()
+        db = DatabaseManager()
 
-    cap = cv2.VideoCapture(st.session_state.cam_index, cv2.CAP_DSHOW)
-    if not cap.isOpened():
-        cap = cv2.VideoCapture(st.session_state.cam_index)
+        cap = cv2.VideoCapture(st.session_state.cam_index, cv2.CAP_DSHOW)
+        if not cap.isOpened():
+            cap = cv2.VideoCapture(st.session_state.cam_index)
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-    start_time = time.time()
-    target_sec = st.session_state.duration_min * 60
-    fps = 30.0
-    prev_time = time.time()
-    snapshot_taken = False
-    snapshot_file_path = None
-    session_saved = False
-    session_db_id = None
-    st.session_state.active_session_db_id = None
-    frame_count = 0
-    elapsed = 0.0
+        start_time = time.time()
+        target_sec = st.session_state.duration_min * 60
+        fps = 30.0
+        prev_time = time.time()
+        snapshot_taken = False
+        snapshot_file_path = None
+        session_saved = False
+        session_db_id = None
+        st.session_state.active_session_db_id = None
+        frame_count = 0
+        elapsed = 0.0
 
-    try:
-        while st.session_state.current_page == "session":
-            ret, frame = cap.read()
-            if not ret:
-                time.sleep(0.02)
-                continue
+        try:
+            while st.session_state.current_page == "session":
+                ret, frame = cap.read()
+                if not ret:
+                    time.sleep(0.02)
+                    continue
 
-            frame = cv2.flip(frame, 1)
-            frame_count += 1
-            elapsed = time.time() - start_time
-            remaining = max(0, target_sec - elapsed)
+                frame = cv2.flip(frame, 1)
+                frame_count += 1
+                elapsed = time.time() - start_time
+                remaining = max(0, target_sec - elapsed)
 
-            # Compute FPS
-            now = time.time()
-            dt = now - prev_time
-            prev_time = now
-            if dt > 0:
-                fps = 0.9 * fps + 0.1 * (1.0 / dt)
+                now = time.time()
+                dt = now - prev_time
+                prev_time = now
+                if dt > 0:
+                    fps = 0.9 * fps + 0.1 * (1.0 / dt)
 
-            # 1. Face & Eye Tracking
-            face_results, face_count = face_detector.process(frame)
-            if face_count > 0:
-                eye_data = eye_detector.detect_eye_state_from_face(frame, face_results)
-            else:
-                eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
+                face_results, face_count = face_detector.process(frame)
+                if face_count > 0:
+                    eye_data = eye_detector.detect_eye_state_from_face(frame, face_results)
+                else:
+                    eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
 
-            # 2. YOLO Phone Radar
-            phone_data = phone_detector.detect(frame)
+                phone_data = phone_detector.detect(frame)
 
-            # 3. Decision Engine
-            engine_data = distraction_engine.update(
-                face_count=face_count,
-                eye_status=eye_data.get("eye_status", "UNKNOWN"),
-                phone_detected=phone_data.get("phone_detected", False),
-            )
+                engine_data = distraction_engine.update(
+                    face_count=face_count,
+                    eye_status=eye_data.get("eye_status", "UNKNOWN"),
+                    phone_detected=phone_data.get("phone_detected", False),
+                )
 
-            # 4. Instant State-Based Audio Trigger
-            target_alert = engine_data.get("target_alert")
-            alert_manager.sync_alert_state(target_alert)
+                target_alert = engine_data.get("target_alert")
+                alert_manager.sync_alert_state(target_alert)
 
-            # 5. Draw Cyberpunk Reticle Bounding Box
-            if phone_data.get("phone_detected", False) and phone_data.get("detections"):
-                frame = phone_detector.draw_detections(frame, phone_data["detections"])
+                if phone_data.get("phone_detected", False) and phone_data.get("detections"):
+                    frame = phone_detector.draw_detections(frame, phone_data["detections"])
 
-            score_val = engine_data.get("focus_score", 100.0)
+                score_val = engine_data.get("focus_score", 100.0)
 
-            # 📸 3-SECOND AUTOMATIC IDENTITY SNAPSHOT & INSTANT DATABASE PERSISTENCE
-            if not snapshot_taken and (elapsed >= 3.0 or frame_count >= 30):
-                try:
-                    snap_name = f"snap_{st.session_state.student_name}_{int(time.time())}.jpg"
-                    snap_full_path = config.SNAPSHOTS_DIR / snap_name
-                    cv2.imwrite(str(snap_full_path), frame)
-                    snapshot_file_path = str(snap_full_path)
-                    snapshot_taken = True
+                # 📸 3-SECOND AUTOMATIC SNAPSHOT
+                if not snapshot_taken and (elapsed >= 3.0 or frame_count >= 30):
+                    try:
+                        snap_name = f"snap_{st.session_state.student_name}_{int(time.time())}.jpg"
+                        snap_full_path = config.SNAPSHOTS_DIR / snap_name
+                        cv2.imwrite(str(snap_full_path), frame)
+                        snapshot_file_path = str(snap_full_path)
+                        snapshot_taken = True
 
-                    # ⚡ Save to SQLite immediately at 3 seconds!
-                    db_init = DatabaseManager()
-                    db_init.initialise()
-                    session_db_id = db_init.save_session({
-                        "student_name": st.session_state.student_name,
-                        "total_duration": elapsed,
-                        "focused_duration": engine_data.get("focused_duration", 0.0),
-                        "distracted_duration": engine_data.get("distracted_duration", 0.0),
-                        "phone_duration": engine_data.get("phone_duration", 0.0),
-                        "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
-                        "phone_events": engine_data.get("phone_events", 0),
-                        "drowsiness_events": engine_data.get("drowsiness_events", 0),
-                        "focus_score": score_val,
-                        "snapshot_path": snapshot_file_path,
-                    })
-                    st.session_state.active_session_db_id = session_db_id
-                except Exception as e:
-                    print(f"[Snapshot & Auto-Save Error] {e}")
+                        db_init = DatabaseManager()
+                        db_init.initialise()
+                        session_db_id = db_init.save_session({
+                            "student_name": st.session_state.student_name,
+                            "total_duration": elapsed,
+                            "focused_duration": engine_data.get("focused_duration", 0.0),
+                            "distracted_duration": engine_data.get("distracted_duration", 0.0),
+                            "phone_duration": engine_data.get("phone_duration", 0.0),
+                            "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
+                            "phone_events": engine_data.get("phone_events", 0),
+                            "drowsiness_events": engine_data.get("drowsiness_events", 0),
+                            "focus_score": score_val,
+                            "snapshot_path": snapshot_file_path,
+                        })
+                        st.session_state.active_session_db_id = session_db_id
+                    except Exception as e:
+                        print(f"[Snapshot Error] {e}")
 
-            # 6. Render Cyberpunk Glass HUD
-            h, w = frame.shape[:2]
-            state = engine_data.get("current_state", DistractionState.FOCUSED)
+                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                video_feed_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
 
-            if state == DistractionState.FOCUSED:
-                theme_col = (130, 210, 30)
-                state_lbl = "FOCUSED"
-            elif state == DistractionState.PHONE_DISTRACTION:
-                theme_col = (40, 60, 240)
-                state_lbl = "PHONE DETECTED"
-            elif state == DistractionState.DROWSY:
-                theme_col = (30, 160, 255)
-                state_lbl = "DROWSINESS DETECTED"
-            elif state == DistractionState.HIGH_DISTRACTION:
-                theme_col = (20, 20, 255)
-                state_lbl = "CRITICAL DISTRACTION"
-            elif state == DistractionState.NO_FACE:
-                theme_col = (160, 160, 160)
-                state_lbl = "NO FACE DETECTED"
-            else:
-                theme_col = (140, 140, 140)
-                state_lbl = "STUDY SENTRY"
+                score_cls = "gauge-val-emerald" if score_val >= 80 else ("gauge-val-amber" if score_val >= 60 else "gauge-val-red")
 
-            overlay = frame.copy()
-            # Top-Left State Pill
-            cv2.rectangle(overlay, (14, 14), (250, 50), (12, 14, 22), -1)
-            cv2.circle(overlay, (32, 32), 6, theme_col, -1)
-            cv2.putText(overlay, state_lbl, (48, 37), cv2.FONT_HERSHEY_DUPLEX, 0.48, (240, 245, 255), 1, cv2.LINE_AA)
+                st.session_state.active_session_data = {
+                    "student_name": st.session_state.student_name,
+                    "total_duration": elapsed,
+                    "focused_duration": engine_data.get("focused_duration", 0.0),
+                    "distracted_duration": engine_data.get("distracted_duration", 0.0),
+                    "phone_duration": engine_data.get("phone_duration", 0.0),
+                    "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
+                    "phone_events": engine_data.get("phone_events", 0),
+                    "drowsiness_events": engine_data.get("drowsiness_events", 0),
+                    "focus_score": score_val,
+                    "snapshot_path": snapshot_file_path,
+                }
 
-            # Top-Right Audio Pill
-            audio_on = alert_manager.is_playing
-            audio_x = max(14, w - 144)
-            audio_col = (40, 60, 240) if audio_on else (120, 180, 40)
-            cv2.rectangle(overlay, (audio_x, 14), (w - 14, 50), (12, 14, 22), -1)
-            cv2.circle(overlay, (audio_x + 18, 32), 5, audio_col, -1)
-            cv2.putText(overlay, "AUDIO ON" if audio_on else "AUDIO OFF", (audio_x + 32, 37), cv2.FONT_HERSHEY_DUPLEX, 0.46, (220, 225, 240), 1, cv2.LINE_AA)
+                gauge_box.markdown(
+                    f"""
+                    <div class="gauge-card">
+                        <div class="section-label">FOCUS EFFICIENCY SCORE</div>
+                        <div class="{score_cls}">{score_val:.0f}%</div>
+                        <div style="color: #94A3B8; font-size: 13px; font-weight: 700;">Status: {engine_data.get('current_state', 'FOCUSED')}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-            # Eye closure progress bar
-            eye_dur = engine_data.get("eye_closed_duration", 0.0)
-            if eye_dur > 0 and eye_data.get("eye_status") == "CLOSED":
-                prog = min(1.0, eye_dur / max(0.1, config.EYE_CLOSED_DURATION_THRESHOLD))
-                cv2.rectangle(overlay, (14, 58), (234, 66), (20, 20, 30), -1)
-                fill_w = int(220 * prog)
-                if fill_w > 0:
-                    cv2.rectangle(overlay, (14, 58), (14 + fill_w, 66), (30, 160, 255), -1)
-                cv2.putText(overlay, f"Eyes Closed: {eye_dur:.1f}s", (244, 65), cv2.FONT_HERSHEY_DUPLEX, 0.40, (240, 240, 255), 1, cv2.LINE_AA)
+                clock_box.markdown(
+                    f"""
+                    <div class="card-surface" style="padding: 16px 20px; margin-bottom: 14px;">
+                        <div class="section-label">TIME REMAINING</div>
+                        <div style="font-size: 38px; font-weight: 900; color: #F8FAFC; font-variant-numeric: tabular-nums;">{format_time(remaining)}</div>
+                        <div style="color: #64748B; font-size: 12px; font-weight: 600;">Elapsed: {format_time(elapsed)} • ⚡ FPS: {int(fps)}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-            cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
-            cv2.rectangle(frame, (14, 14), (250, 50), (50, 55, 75), 1)
-            cv2.rectangle(frame, (audio_x, 14), (w - 14, 50), (50, 55, 75), 1)
+                time.sleep(0.01)
 
-            # Render Stream to Streamlit
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            video_feed_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
+        finally:
+            cap.release()
+            alert_manager.stop_all()
+            face_detector.close()
 
-            score_cls = "gauge-val-emerald" if score_val >= 80 else ("gauge-val-amber" if score_val >= 60 else "gauge-val-red")
+    else:
+        # WebRTC Active Telemetry Card rendering
+        target_sec = st.session_state.duration_min * 60
+        proc = ctx.video_processor if (ctx and ctx.video_processor) else None
+        elapsed = proc.elapsed if proc else 0.0
+        remaining = max(0, target_sec - elapsed)
+        score_val = proc.latest_engine_data.get("focus_score", 100.0) if proc else 100.0
+        score_cls = "gauge-val-emerald" if score_val >= 80 else ("gauge-val-amber" if score_val >= 60 else "gauge-val-red")
 
-            # 💾 Continuous Session State Cache
+        if proc:
             st.session_state.active_session_data = {
                 "student_name": st.session_state.student_name,
                 "total_duration": elapsed,
-                "focused_duration": engine_data.get("focused_duration", 0.0),
-                "distracted_duration": engine_data.get("distracted_duration", 0.0),
-                "phone_duration": engine_data.get("phone_duration", 0.0),
-                "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
-                "phone_events": engine_data.get("phone_events", 0),
-                "drowsiness_events": engine_data.get("drowsiness_events", 0),
+                "focused_duration": proc.latest_engine_data.get("focused_duration", 0.0),
+                "distracted_duration": proc.latest_engine_data.get("distracted_duration", 0.0),
+                "phone_duration": proc.latest_engine_data.get("phone_duration", 0.0),
+                "drowsiness_duration": proc.latest_engine_data.get("drowsiness_duration", 0.0),
+                "phone_events": proc.latest_engine_data.get("phone_events", 0),
+                "drowsiness_events": proc.latest_engine_data.get("drowsiness_events", 0),
                 "focus_score": score_val,
-                "snapshot_path": snapshot_file_path,
+                "snapshot_path": proc.snapshot_file_path,
             }
+            st.session_state.active_session_db_id = proc.session_db_id
 
-            gauge_box.markdown(
-                f"""
-                <div class="gauge-card">
-                    <div class="section-label">FOCUS EFFICIENCY SCORE</div>
-                    <div class="{score_cls}">{score_val:.0f}%</div>
-                    <div style="color: #94A3B8; font-size: 13px; font-weight: 700;">Status: {state_lbl}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        gauge_box.markdown(
+            f"""
+            <div class="gauge-card">
+                <div class="section-label">FOCUS EFFICIENCY SCORE</div>
+                <div class="{score_cls}">{score_val:.0f}%</div>
+                <div style="color: #94A3B8; font-size: 13px; font-weight: 700;">Status: ACTIVE SENTRY</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-            clock_box.markdown(
-                f"""
-                <div class="card-surface" style="padding: 16px 20px; margin-bottom: 14px;">
-                    <div class="section-label">TIME REMAINING</div>
-                    <div style="font-size: 38px; font-weight: 900; color: #F8FAFC; font-variant-numeric: tabular-nums;">{format_time(remaining)}</div>
-                    <div style="color: #64748B; font-size: 12px; font-weight: 600;">Elapsed: {format_time(elapsed)} • ⚡ FPS: {int(fps)}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+        clock_box.markdown(
+            f"""
+            <div class="card-surface" style="padding: 16px 20px; margin-bottom: 14px;">
+                <div class="section-label">TIME REMAINING</div>
+                <div style="font-size: 38px; font-weight: 900; color: #F8FAFC; font-variant-numeric: tabular-nums;">{format_time(remaining)}</div>
+                <div style="color: #64748B; font-size: 12px; font-weight: 600;">Elapsed: {format_time(elapsed)} • 🌐 Mode: WebRTC</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-            eye_st = eye_data.get("eye_status", "OPEN")
-            eye_col_cls = "t-val-green" if eye_st == "OPEN" else "t-val-red"
-            ph_det = phone_data.get("phone_detected", False)
-            ph_col_cls = "t-val-red" if ph_det else "t-val-green"
-            ph_txt = "DETECTED" if ph_det else "CLEAR"
-            drowsy_flag = engine_data.get("drowsiness_confirmed", False)
-            drowsy_col_cls = "t-val-red" if drowsy_flag else "t-val-green"
-            drowsy_txt = "DROWSY" if drowsy_flag else "ALERT"
-            aud_col_cls = "t-val-red" if alert_manager.is_playing else "t-val-green"
-            aud_txt = "ACTIVE" if alert_manager.is_playing else "OFF"
-
-            telemetry_box.markdown(
-                f"""
-                <div class="card-surface" style="padding: 16px;">
-                    <div class="section-label" style="margin-bottom: 10px;">LIVE TELEMETRY RADAR</div>
-                    <div class="telemetry-row"><span class="t-label">👁️ Eye Sentry</span><span class="{eye_col_cls}">● {eye_st} ({eye_data.get('avg_ear', 0.0):.2f})</span></div>
-                    <div class="telemetry-row"><span class="t-label">📱 Phone Radar</span><span class="{ph_col_cls}">● {ph_txt}</span></div>
-                    <div class="telemetry-row"><span class="t-label">😴 Drowsiness Sentry</span><span class="{drowsy_col_cls}">● {drowsy_txt}</span></div>
-                    <div class="telemetry-row"><span class="t-label">🔔 Audio Alarms</span><span class="{aud_col_cls}">● {aud_txt}</span></div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            # Auto-save when target duration finishes
-            if remaining <= 0:
-                if st.session_state.active_session_data:
-                    if session_db_id:
-                        db.update_session(session_db_id, st.session_state.active_session_data)
-                    else:
-                        db.save_session(st.session_state.active_session_data)
-                    st.session_state.last_session_stats = st.session_state.active_session_data
-                    st.session_state.active_session_data = None
-                session_saved = True
-                st.session_state.current_page = "completion"
-                st.rerun()
-
-            time.sleep(0.01)
-
-    finally:
-        cap.release()
-        alert_manager.stop_all()
-        face_detector.close()
-
-        # Always update/save session on exit if elapsed >= 1.0s and not already saved
-        if elapsed >= 1.0 and not session_saved and "active_session_data" in st.session_state and st.session_state.active_session_data:
-            try:
-                db_final = DatabaseManager()
-                db_final.initialise()
-                target_id = session_db_id or st.session_state.get("active_session_db_id")
-                if target_id:
-                    db_final.update_session(target_id, st.session_state.active_session_data)
-                else:
-                    db_final.save_session(st.session_state.active_session_data)
-                st.session_state.last_session_stats = st.session_state.active_session_data
-                st.session_state.active_session_data = None
-                session_saved = True
-            except Exception as e:
-                print(f"[Finally Save Error] {e}")
+        telemetry_box.markdown(
+            f"""
+            <div class="card-surface" style="padding: 16px;">
+                <div class="section-label" style="margin-bottom: 10px;">LIVE TELEMETRY RADAR</div>
+                <div class="telemetry-row"><span class="t-label">👁️ Eye Sentry</span><span class="t-val-green">● ACTIVE</span></div>
+                <div class="telemetry-row"><span class="t-label">📱 Phone Radar</span><span class="t-val-green">● RADAR SCANNING</span></div>
+                <div class="telemetry-row"><span class="t-label">😴 Drowsiness Sentry</span><span class="t-val-green">● PROCTOR ON</span></div>
+                <div class="telemetry-row"><span class="t-label">🔔 Audio Alarms</span><span class="t-val-green">● ENABLED</span></div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 # ═════════════════════════════════════════════════════════════════════════════
