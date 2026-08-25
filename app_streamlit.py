@@ -104,9 +104,17 @@ class WebRTCVisionProcessor:
     def __init__(self):
         self.face_detector = FaceMeshDetector()
         self.eye_detector = EyeDetector()
-        self.phone_detector = PhoneDetector()
+        try:
+            self.phone_detector = PhoneDetector()
+        except Exception as e:
+            print(f"[WebRTC] PhoneDetector init failed (non-fatal): {e}")
+            self.phone_detector = None
         self.distraction_engine = DistractionEngine()
-        self.alert_manager = AlertManager()
+        try:
+            self.alert_manager = AlertManager()
+        except Exception as e:
+            print(f"[WebRTC] AlertManager init failed (no audio on cloud, non-fatal): {e}")
+            self.alert_manager = None
         self.student_name = "Student"
         self.duration_min = 25
         self.start_time = time.time()
@@ -142,7 +150,10 @@ class WebRTCVisionProcessor:
             eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
 
         # 2. YOLO Phone Radar
-        phone_data = self.phone_detector.detect(img)
+        if self.phone_detector:
+            phone_data = self.phone_detector.detect(img)
+        else:
+            phone_data = {"phone_detected": False, "detections": []}
 
         # 3. Decision Engine
         engine_data = self.distraction_engine.update(
@@ -151,12 +162,16 @@ class WebRTCVisionProcessor:
             phone_detected=phone_data.get("phone_detected", False),
         )
 
-        # 4. Instant State-Based Audio Trigger
-        target_alert = engine_data.get("target_alert")
-        self.alert_manager.sync_alert_state(target_alert)
+        # 4. Instant State-Based Audio Trigger (skip if no audio on cloud)
+        if self.alert_manager:
+            try:
+                target_alert = engine_data.get("target_alert")
+                self.alert_manager.sync_alert_state(target_alert)
+            except Exception:
+                pass
 
         # 5. Draw Cyberpunk Reticle Bounding Box
-        if phone_data.get("phone_detected", False) and phone_data.get("detections"):
+        if phone_data.get("phone_detected", False) and phone_data.get("detections") and self.phone_detector:
             img = self.phone_detector.draw_detections(img, phone_data["detections"])
 
         score_val = engine_data.get("focus_score", 100.0)
@@ -214,7 +229,7 @@ class WebRTCVisionProcessor:
         cv2.circle(overlay, (32, 32), 6, theme_col, -1)
         cv2.putText(overlay, state_lbl, (48, 37), cv2.FONT_HERSHEY_DUPLEX, 0.48, (240, 245, 255), 1, cv2.LINE_AA)
 
-        audio_on = self.alert_manager.is_playing
+        audio_on = self.alert_manager.is_playing if self.alert_manager else False
         audio_x = max(14, w - 144)
         audio_col = (40, 60, 240) if audio_on else (120, 180, 40)
         cv2.rectangle(overlay, (audio_x, 14), (w - 14, 50), (12, 14, 22), -1)
@@ -1249,14 +1264,20 @@ elif st.session_state.current_page == "settings":
         t_col1, t_col2 = st.columns(2)
         with t_col1:
             if st.button("▶️ Test Phone Alert", use_container_width=True):
-                test_alert = AlertManager()
-                test_alert.play_meme(config.AUDIO_PHONE_ALERT)
-                st.toast("🔊 Playing Phone Meme Alert!")
+                try:
+                    test_alert = AlertManager()
+                    test_alert.start_alert("phone")
+                    st.toast("🔊 Playing Phone Meme Alert!")
+                except Exception:
+                    st.warning("⚠️ Audio playback unavailable on cloud deployment.")
         with t_col2:
             if st.button("▶️ Test Drowsy Alert", use_container_width=True):
-                test_alert = AlertManager()
-                test_alert.play_meme(config.AUDIO_DROWSY_ALERT)
-                st.toast("😴 Playing Drowsiness Wake-up Alert!")
+                try:
+                    test_alert = AlertManager()
+                    test_alert.start_alert("drowsiness")
+                    st.toast("😴 Playing Drowsiness Wake-up Alert!")
+                except Exception:
+                    st.warning("⚠️ Audio playback unavailable on cloud deployment.")
 
     st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
     st.success("✅ All changes saved automatically to persistent configuration!")
