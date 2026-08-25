@@ -897,6 +897,7 @@ elif st.session_state.current_page == "session":
                 const pC1 = mesh[c1], pC2 = mesh[c2];
                 const pT1 = mesh[t1], pB1 = mesh[b1];
                 const pT2 = mesh[t2], pB2 = mesh[b2];
+                if (!pC1 || !pC2 || !pT1 || !pB1 || !pT2 || !pB2) return 0.30;
                 const v1 = dist(pT1, pB1);
                 const v2 = dist(pT2, pB2);
                 const h = 2.0 * dist(pC1, pC2);
@@ -915,11 +916,11 @@ elif st.session_state.current_page == "session":
                 currentAvgEAR = (leftEAR + rightEAR) / 2.0;
 
                 const now = performance.now();
-                // 0.255 threshold accommodates spectacles and natural blinks
-                if (currentAvgEAR < 0.255) {{
+                // EAR < 0.22 accurately marks closed eyes
+                if (currentAvgEAR < 0.22) {{
                     if (!eyesClosedStart) eyesClosedStart = now;
                     eyeClosedTimer = (now - eyesClosedStart) / 1000;
-                    // Trigger alarm after 3 full seconds of closed eyes
+                    // Trigger alarm after exactly 3.0 seconds of closed eyes
                     if (eyeClosedTimer >= 3.0) {{
                         isDrowsyDistraction = true;
                     }}
@@ -932,20 +933,25 @@ elif st.session_state.current_page == "session":
 
             let phoneLastSeenTime = 0;
 
-            // 3. Periodic Phone Radar Scan (Strictly filtered for Cell Phone & Remote ONLY)
-            const targetClasses = ['cell phone', 'remote'];
+            // 3. Periodic Phone Radar Scan (Strictly CELL PHONE ONLY, score >= 0.38, w >= 60, h >= 80)
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
-                        const predictions = await cocoModel.detect(video, 20, 0.15);
-                        const matched = predictions.filter(p => targetClasses.includes(p.class) && p.score >= 0.26);
+                        const predictions = await cocoModel.detect(video, 10, 0.20);
+                        const matched = predictions.filter(p => {{
+                            if (p.class !== 'cell phone') return false;
+                            if (p.score < 0.38) return false;
+                            const [x, y, w, h] = p.bbox;
+                            // Exclude tiny objects like fingers (phones are at least 60x80 px)
+                            return (w >= 60 && h >= 80);
+                        }});
                         phoneDetections = matched;
                         if (matched.length > 0) {{
                             phoneLastSeenTime = performance.now();
                         }}
                     }} catch (e) {{}}
                 }}
-            }}, 70);
+            }}, 80);
 
             // 4. Periodic FaceMesh Processing (Direct stream, zero hijacking)
             let isProcessingFace = false;
@@ -957,7 +963,7 @@ elif st.session_state.current_page == "session":
                     }} catch (e) {{}}
                     isProcessingFace = false;
                 }}
-            }}, 80);
+            }}, 60);
 
             // 5. Enumerate Cameras & Live Switching Engine
             let availableCameras = [];
