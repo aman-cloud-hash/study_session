@@ -377,31 +377,25 @@ if st.session_state.current_page == "home":
 
     with col_features:
         st.markdown(
-            """
-            <div class="card-surface">
-                <div class="card-title">⚡ AI Vision Engine Capabilities</div>
-                
-                <div class="feat-card">
-                    <div class="feat-title">👁️ Google MediaPipe 3D Mesh</div>
-                    <div class="feat-desc">Calculates 478 landmark points to compute Eye Aspect Ratio (EAR) with sub-millisecond precision.</div>
-                </div>
-                
-                <div class="feat-card">
-                    <div class="feat-title">📱 YOLOv8 Mobile Phone Radar</div>
-                    <div class="feat-desc">Async background inference with pure PyTorch NMS for instant 1-frame phone pickup detection.</div>
-                </div>
-                
-                <div class="feat-card">
-                    <div class="feat-title">😴 Smart Drowsiness Sentry</div>
-                    <div class="feat-desc">Temporal debounce logic tracks consecutive eye closures to trigger high-urgency wake-up alerts.</div>
-                </div>
-                
-                <div class="feat-card">
-                    <div class="feat-title">🔊 Targeted Meme & Voice Alarms</div>
-                    <div class="feat-desc">Plays custom meme audio on phone distraction and instant halt the moment phone is put away.</div>
-                </div>
-            </div>
-            """,
+            '<div class="card-surface">'
+            '<div class="card-title">⚡ AI Vision Engine Capabilities</div>'
+            '<div class="feat-card">'
+            '<div class="feat-title">👁️ Google MediaPipe 3D Mesh</div>'
+            '<div class="feat-desc">Calculates 478 landmark points to compute Eye Aspect Ratio (EAR) with sub-millisecond precision.</div>'
+            '</div>'
+            '<div class="feat-card">'
+            '<div class="feat-title">📱 YOLOv8 Mobile Phone Radar</div>'
+            '<div class="feat-desc">Async background inference with pure PyTorch NMS for instant 1-frame phone pickup detection.</div>'
+            '</div>'
+            '<div class="feat-card">'
+            '<div class="feat-title">😴 Smart Drowsiness Sentry</div>'
+            '<div class="feat-desc">Temporal debounce logic tracks consecutive eye closures to trigger high-urgency wake-up alerts.</div>'
+            '</div>'
+            '<div class="feat-card">'
+            '<div class="feat-title">🔊 Targeted Meme & Voice Alarms</div>'
+            '<div class="feat-desc">Plays custom meme audio on phone distraction and instant halt the moment phone is put away.</div>'
+            '</div>'
+            '</div>',
             unsafe_allow_html=True,
         )
 
