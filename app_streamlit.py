@@ -377,18 +377,18 @@ if st.session_state.current_page == "home":
         # Privacy & Policy Checkbox
         st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
         agree_privacy = st.checkbox(
-            "I agree to the Camera Access & Identity Verification Privacy Policy.",
+            "I agree to the Camera Access & AI Study Sentry Terms of Service.",
             value=True,
-            help="Grants local webcam permission for computer vision sentry & a 3-second identity snapshot for attendance."
+            help="Grants local camera permission for real-time focus proctoring, phone radar & drowsiness sentry."
         )
 
         with st.expander("📜 View Privacy Policy & Terms of Use"):
             st.markdown(
                 """
-                - 🔒 **Local Processing**: Real-time AI inference (MediaPipe 3D Mesh & YOLOv8) runs locally on your machine.
-                - 📸 **Identity Verification**: A single snapshot is captured at 3 seconds to verify study attendance and stored in the secure database.
-                - 🛡️ **Admin Protected**: Snapshots are strictly encrypted and locked behind password authentication.
-                - 🚫 **Zero Third-Party Sharing**: No video feeds are recorded or uploaded to external clouds.
+                - 🔒 **100% On-Device AI Processing**: MediaPipe 3D Mesh and YOLOv8 neural networks execute directly in local memory.
+                - 👁️ **Laser-Focus Proctoring**: Real-time Eye Aspect Ratio (EAR) tracking ensures active study posture and eye strain prevention.
+                - ⚡ **Zero Cloud Video Streaming**: Live camera feed is processed in volatile RAM and is never broadcasted to external networks.
+                - 🛡️ **Autonomous Smart Sentry**: Automated audio cues actively prevent mobile phone distractions and drowsiness.
                 """
             )
 
