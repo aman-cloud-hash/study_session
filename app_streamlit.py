@@ -813,48 +813,137 @@ elif st.session_state.current_page == "history":
         """
         <div style="margin-bottom: 20px;">
             <div class="hero-badge">📊 STUDY HISTORY & ANALYTICS</div>
-            <h2 style="font-size: 28px; font-weight: 900; color: #FFFFFF; margin: 4px 0;">Historical Performance Archives</h2>
-            <p style="color: #94A3B8; font-size: 13px;">Track your long-term focus progression, study consistency, and verification snapshots.</p>
+            <h2 style="font-size: clamp(20px, 4.5vw, 28px); font-weight: 900; color: #FFFFFF; margin: 4px 0;">Historical Performance Archives</h2>
+            <p style="color: #94A3B8; font-size: clamp(12px, 2.5vw, 13px);">Track your long-term focus progression, study consistency, and verification snapshots.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
     db = DatabaseManager()
+    db.initialise()
     analytics = AnalyticsEngine(db)
     stats = analytics.get_summary_statistics()
+    sessions = db.get_all_sessions()
 
-    s1, s2, s3, s4 = st.columns(4)
-    s1.metric("Total Sessions", stats.get("total_sessions", 0))
-    s2.metric("Total Study Time", format_time(stats.get("total_study_time_sec", 0)))
-    s3.metric("Average Score", f"{stats.get('avg_focus_score', 0)}%")
-    s4.metric("Best Score", f"{stats.get('best_focus_score', 0)}%")
+    # Top KPI Metrics Cards
+    kpi_col1, kpi_col2, kpi_col3, kpi_col4 = st.columns(4)
+    total_sess_cnt = stats.get("total_sessions", 0)
+    total_study_sec = stats.get("total_study_time_sec", 0)
+    avg_score_val = stats.get("avg_focus_score", 0)
+    best_score_val = stats.get("best_focus_score", 0)
 
-    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+    with kpi_col1:
+        st.markdown(
+            f"""
+            <div class="card-surface" style="padding: 14px 18px; text-align: center;">
+                <div class="section-label">TOTAL SESSIONS</div>
+                <div style="font-size: 26px; font-weight: 900; color: #818CF8;">{total_sess_cnt}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with kpi_col2:
+        st.markdown(
+            f"""
+            <div class="card-surface" style="padding: 14px 18px; text-align: center;">
+                <div class="section-label">TOTAL TIME</div>
+                <div style="font-size: 26px; font-weight: 900; color: #38BDF8;">{format_time(total_study_sec)}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with kpi_col3:
+        avg_col = "#10B981" if avg_score_val >= 75 else ("#F59E0B" if avg_score_val >= 50 else "#EF4444")
+        st.markdown(
+            f"""
+            <div class="card-surface" style="padding: 14px 18px; text-align: center;">
+                <div class="section-label">AVG FOCUS SCORE</div>
+                <div style="font-size: 26px; font-weight: 900; color: {avg_col};">{avg_score_val:.0f}%</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with kpi_col4:
+        st.markdown(
+            f"""
+            <div class="card-surface" style="padding: 14px 18px; text-align: center;">
+                <div class="section-label">BEST FOCUS SCORE</div>
+                <div style="font-size: 26px; font-weight: 900; color: #10B981;">{best_score_val:.0f}%</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+
+    # Search & Filter Strip
+    f_col1, f_col2 = st.columns([2, 1], gap="medium")
+    with f_col1:
+        search_query = st.text_input("🔍 Search by Student Name", placeholder="Filter by name...", label_visibility="collapsed")
+    with f_col2:
+        filter_type = st.segmented_control(
+            "Filter Sessions",
+            options=["All", "High Focus (≥80%)", "Needs Focus (<80%)"],
+            default="All",
+            label_visibility="collapsed"
+        )
+
+    # Filter Sessions DataFrame
+    filtered_sessions = sessions
+    if search_query.strip():
+        filtered_sessions = [s for s in filtered_sessions if search_query.lower() in s.get("student_name", "").lower()]
+    if filter_type == "High Focus (≥80%)":
+        filtered_sessions = [s for s in filtered_sessions if s.get("focus_score", 0) >= 80]
+    elif filter_type == "Needs Focus (<80%)":
+        filtered_sessions = [s for s in filtered_sessions if s.get("focus_score", 0) < 80]
 
     c_chart, c_table = st.columns([1, 1], gap="large")
 
     with c_chart:
-        st.markdown("#### 📈 Focus Progression Trend")
+        st.markdown(
+            """
+            <div class="card-surface">
+                <div class="card-title">📈 Focus Progression Trend</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         fig = analytics.generate_history_trend_chart()
         if fig:
-            st.pyplot(fig)
+            st.pyplot(fig, use_container_width=True)
         else:
             st.info("Complete study sessions to generate your trend chart.")
 
     with c_table:
-        st.markdown("#### 📜 Recorded Study Sessions")
-        sessions = db.get_all_sessions()
-        if sessions:
-            df = pd.DataFrame(sessions)
+        st.markdown(
+            """
+            <div class="card-surface">
+                <div class="card-title">📜 Recorded Study Sessions</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        if filtered_sessions:
+            df = pd.DataFrame(filtered_sessions)
             df["Duration"] = df["total_duration"].apply(format_time)
             df["Focused"] = df["focused_duration"].apply(format_time)
             df["Score"] = df["focus_score"].apply(lambda s: f"{s:.0f}%")
             display_cols = ["session_id", "student_name", "date", "Duration", "Focused", "Score"]
             display_df = df[[col for col in display_cols if col in df.columns]]
-            st.dataframe(display_df, use_container_width=True)
+            st.dataframe(display_df, use_container_width=True, height=280)
+
+            # CSV Download
+            csv_data = display_df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "📥 Export Sessions to CSV",
+                data=csv_data,
+                file_name="study_focus_history.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
         else:
-            st.info("No study sessions recorded yet.")
+            st.info("No matching study sessions recorded yet.")
 
     st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
 
@@ -864,7 +953,7 @@ elif st.session_state.current_page == "history":
         <div class="card-surface">
             <div class="card-title">🔐 Admin Verification Vault (Student Identity Snapshots)</div>
             <p style="color: #94A3B8; font-size: 13px; margin-top: -8px;">
-                Identity photos captured automatically 2 seconds after each student session begins. Strictly protected for authorized administrators.
+                Identity photos captured automatically at 3 seconds into each study session. Strictly protected for authorized administrators.
             </p>
         </div>
         """,
@@ -874,29 +963,35 @@ elif st.session_state.current_page == "history":
     if "admin_authenticated" not in st.session_state:
         st.session_state.admin_authenticated = False
 
-    admin_col1, admin_col2 = st.columns([3, 1])
-
-    with admin_col1:
-        pwd_input = st.text_input("Enter Admin Password", type="password", placeholder="Enter secret admin passkey...", label_visibility="collapsed")
-    with admin_col2:
-        if st.button("🔓 Unlock Vault", use_container_width=True, type="primary"):
-            if pwd_input == ADMIN_PASSWORD:
-                st.session_state.admin_authenticated = True
-                st.success("✅ Admin Access Granted!")
+    if not st.session_state.admin_authenticated:
+        admin_col1, admin_col2 = st.columns([3, 1])
+        with admin_col1:
+            pwd_input = st.text_input("Enter Admin Password", type="password", placeholder="Enter secret admin passkey...", label_visibility="collapsed")
+        with admin_col2:
+            if st.button("🔓 Unlock Vault", use_container_width=True, type="primary"):
+                if pwd_input == ADMIN_PASSWORD:
+                    st.session_state.admin_authenticated = True
+                    st.success("✅ Admin Access Granted!")
+                    st.rerun()
+                else:
+                    st.error("❌ Incorrect Admin Password. Access Denied.")
+    else:
+        auth_head1, auth_head2 = st.columns([3, 1])
+        with auth_head1:
+            st.markdown(
+                """
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 12px 16px; color: #10B981; font-weight: 700; font-size: 14px;">
+                    🔓 Admin Access Active • Displaying All Session Verification Snapshots
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+        with auth_head2:
+            if st.button("🔒 Lock Vault", use_container_width=True, type="secondary"):
+                st.session_state.admin_authenticated = False
                 st.rerun()
-            else:
-                st.error("❌ Incorrect Admin Password. Access Denied.")
 
-    # Render Snapshots Gallery if Authenticated
-    if st.session_state.admin_authenticated:
-        st.markdown(
-            """
-            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 12px 16px; margin: 12px 0 20px 0; color: #10B981; font-weight: 700; font-size: 14px;">
-                🔓 Admin Access Active • Displaying All Session Verification Snapshots
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
 
         if not sessions:
             st.info("No study sessions recorded yet. Start a session and its verification snapshot will be saved automatically!")
@@ -906,9 +1001,9 @@ elif st.session_state.current_page == "history":
                 with gallery_cols[idx % 3]:
                     st.markdown(
                         f"""
-                        <div style="background: #141724; border: 1px solid #1F2338; border-radius: 14px; padding: 14px; margin-bottom: 16px;">
-                            <div style="font-weight: 800; font-size: 15px; color: #FFFFFF;">👤 {s.get('student_name', 'Student')} (Session #{s.get('session_id', idx+1)})</div>
-                            <div style="font-size: 12px; color: #94A3B8; margin-bottom: 8px;">📅 {s.get('date', 'Today')} • ⏱️ {format_time(s.get('total_duration', 0))} • 🎯 Score: {s.get('focus_score', 100):.0f}%</div>
+                        <div style="background: #141724; border: 1px solid #1F2338; border-radius: 14px; padding: 14px; margin-bottom: 12px;">
+                            <div style="font-weight: 800; font-size: 15px; color: #FFFFFF;">👤 {s.get('student_name', 'Student')} <span style="color: #818CF8; font-size: 12px;">(#Session {s.get('session_id', idx+1)})</span></div>
+                            <div style="font-size: 12px; color: #94A3B8; margin-top: 4px;">📅 {s.get('date', 'Today')} • ⏱️ {format_time(s.get('total_duration', 0))} • 🎯 Score: {s.get('focus_score', 100):.0f}%</div>
                         </div>
                         """,
                         unsafe_allow_html=True,
@@ -919,13 +1014,12 @@ elif st.session_state.current_page == "history":
                     else:
                         st.markdown(
                             """
-                            <div style="background: #0E101A; border: 1px dashed #23283E; border-radius: 10px; padding: 28px; text-align: center; color: #64748B; font-size: 12px;">
+                            <div style="background: #0E101A; border: 1px dashed #23283E; border-radius: 10px; padding: 24px; text-align: center; color: #64748B; font-size: 12px; margin-bottom: 12px;">
                                 📷 No Photo (Legacy Session)
                             </div>
                             """,
                             unsafe_allow_html=True,
                         )
-                    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -936,70 +1030,97 @@ elif st.session_state.current_page == "settings":
         """
         <div style="margin-bottom: 20px;">
             <div class="hero-badge">⚙️ APPLICATION SETTINGS</div>
-            <h2 style="font-size: 28px; font-weight: 900; color: #FFFFFF; margin: 4px 0;">AI Sentry Configuration</h2>
-            <p style="color: #94A3B8; font-size: 13px;">Fine-tune computer vision sensitivity, audio alarms, and detection thresholds.</p>
+            <h2 style="font-size: clamp(20px, 4.5vw, 28px); font-weight: 900; color: #FFFFFF; margin: 4px 0;">AI Sentry Configuration</h2>
+            <p style="color: #94A3B8; font-size: clamp(12px, 2.5vw, 13px);">Fine-tune computer vision sensitivity, audio alarms, and detection thresholds.</p>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        """
-        <div class="card-surface">
-            <div class="card-title">👁️ Eye & Drowsiness Detection</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    c_ear = st.slider("Eye Aspect Ratio (EAR) Threshold", min_value=0.15, max_value=0.35, value=float(config.EAR_THRESHOLD), step=0.01)
-    config.EAR_THRESHOLD = c_ear
+    col_s1, col_s2 = st.columns(2, gap="large")
 
-    c_drowsy = st.slider("Drowsiness Alert Delay (seconds)", min_value=1.0, max_value=8.0, value=float(config.EYE_CLOSED_DURATION_THRESHOLD), step=0.5)
-    config.EYE_CLOSED_DURATION_THRESHOLD = c_drowsy
+    with col_s1:
+        # Card 1: Vision Sensitivity
+        st.markdown(
+            """
+            <div class="card-surface">
+                <div class="card-title">👁️ Eye & Drowsiness Sentry</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        c_ear = st.slider("Eye Aspect Ratio (EAR) Threshold", min_value=0.15, max_value=0.35, value=float(config.EAR_THRESHOLD), step=0.01, help="Lower value means eyes must close tighter to trigger alert.")
+        config.EAR_THRESHOLD = c_ear
 
-    st.markdown(
-        """
-        <div class="card-surface">
-            <div class="card-title">📱 Mobile Phone Detection</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    c_phone = st.slider("YOLO Phone Detection Confidence", min_value=0.20, max_value=0.80, value=float(config.PHONE_DETECTION_CONFIDENCE), step=0.05)
-    config.PHONE_DETECTION_CONFIDENCE = c_phone
+        c_drowsy = st.slider("Drowsiness Alert Delay (seconds)", min_value=1.0, max_value=6.0, value=float(config.EYE_CLOSED_DURATION_THRESHOLD), step=0.5, help="Time eyes remain closed before loud wake-up meme plays.")
+        config.EYE_CLOSED_DURATION_THRESHOLD = c_drowsy
 
-    st.markdown(
-        """
-        <div class="card-surface">
-            <div class="card-title">📹 Camera Hardware Device</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    cam_names = [c["name"] for c in st.session_state.detected_cameras]
-    cur_cam = next((c["name"] for c in st.session_state.detected_cameras if c["index"] == st.session_state.cam_index), cam_names[0])
-    s_cam_col1, s_cam_col2 = st.columns([3.2, 1])
-    with s_cam_col1:
-        chosen_cam = st.selectbox("Settings Active Camera", options=cam_names, index=cam_names.index(cur_cam), label_visibility="collapsed")
-        for c in st.session_state.detected_cameras:
-            if c["name"] == chosen_cam:
-                st.session_state.cam_index = c["index"]
-                config.DEFAULT_CAMERA_INDEX = c["index"]
-                break
-    with s_cam_col2:
-        if st.button("🔄 Scan Devices", key="scan_settings_cam", use_container_width=True):
-            st.session_state.detected_cameras = detect_available_cameras(max_tested=4)
-            st.rerun()
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-    st.markdown(
-        """
-        <div class="card-surface">
-            <div class="card-title">🔊 Audio Alarms & Hardware</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    c_sound = st.toggle("Enable Voice & Meme Distraction Alerts", value=config.SOUND_ENABLED)
-    config.SOUND_ENABLED = c_sound
+        # Card 2: Phone Radar
+        st.markdown(
+            """
+            <div class="card-surface">
+                <div class="card-title">📱 YOLO Mobile Phone Radar</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        c_phone = st.slider("Phone Detection Confidence", min_value=0.20, max_value=0.80, value=float(config.PHONE_DETECTION_CONFIDENCE), step=0.05, help="Confidence threshold to identify phone in camera frame.")
+        config.PHONE_DETECTION_CONFIDENCE = c_phone
 
-    st.success("✅ Settings applied automatically!")
+    with col_s2:
+        # Card 3: Camera Hardware
+        st.markdown(
+            """
+            <div class="card-surface">
+                <div class="card-title">📹 Camera Hardware Device</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        cam_names = [c["name"] for c in st.session_state.detected_cameras]
+        cur_cam = next((c["name"] for c in st.session_state.detected_cameras if c["index"] == st.session_state.cam_index), cam_names[0])
+        
+        s_cam_col1, s_cam_col2 = st.columns([3.2, 1])
+        with s_cam_col1:
+            chosen_cam = st.selectbox("Settings Active Camera", options=cam_names, index=cam_names.index(cur_cam), label_visibility="collapsed")
+            for c in st.session_state.detected_cameras:
+                if c["name"] == chosen_cam:
+                    st.session_state.cam_index = c["index"]
+                    config.DEFAULT_CAMERA_INDEX = c["index"]
+                    break
+        with s_cam_col2:
+            if st.button("🔄 Scan", key="scan_settings_cam", use_container_width=True):
+                st.session_state.detected_cameras = detect_available_cameras(max_tested=4)
+                st.rerun()
+
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+
+        # Card 4: Audio Alarms & Test
+        st.markdown(
+            """
+            <div class="card-surface">
+                <div class="card-title">🔊 Audio Alarms & Testing</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        c_sound = st.toggle("Enable Voice & Meme Distraction Alerts", value=config.SOUND_ENABLED)
+        config.SOUND_ENABLED = c_sound
+
+        st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+        t_col1, t_col2 = st.columns(2)
+        with t_col1:
+            if st.button("▶️ Test Phone Alert", use_container_width=True):
+                test_alert = AlertManager()
+                test_alert.play_meme(config.AUDIO_PHONE_ALERT)
+                st.toast("🔊 Playing Phone Meme Alert!")
+        with t_col2:
+            if st.button("▶️ Test Drowsy Alert", use_container_width=True):
+                test_alert = AlertManager()
+                test_alert.play_meme(config.AUDIO_DROWSY_ALERT)
+                st.toast("😴 Playing Drowsiness Wake-up Alert!")
+
+    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
+    st.success("✅ All changes saved automatically to persistent configuration!")
