@@ -536,47 +536,29 @@ if st.session_state.current_page == "home":
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-        # Camera Selector with Auto-Detection & Scan
-        st.markdown('<div class="section-label">ACTIVE CAMERA DEVICE & MODE</div>', unsafe_allow_html=True)
-        cam_col1, cam_col2 = st.columns([3.2, 1])
-
-        available_modes = [
-            {"id": "webrtc", "name": "🌐 Browser WebRTC Camera (Cloud / Mobile / Desktop)", "is_webrtc": True, "index": 0},
-            {"id": "dshow_0", "name": "💻 Local USB Camera 0 (DirectShow Native)", "is_webrtc": False, "index": 0},
-            {"id": "dshow_1", "name": "💻 Local USB Camera 1 (External WebCam)", "is_webrtc": False, "index": 1},
-        ]
-        mode_names = [m["name"] for m in available_modes]
+        # Camera Permission & Device Helper
+        st.markdown('<div class="section-label">CAMERA HARDWARE & PERMISSION</div>', unsafe_allow_html=True)
         
-        cur_mode_name = st.session_state.get("cam_mode_label", mode_names[0])
-        if cur_mode_name not in mode_names:
-            cur_mode_name = mode_names[0]
-
-        with cam_col1:
-            selected_cam_name = st.selectbox(
-                "Active Camera Device",
-                options=mode_names,
-                index=mode_names.index(cur_mode_name),
-                label_visibility="collapsed",
-            )
-            for m in available_modes:
-                if m["name"] == selected_cam_name:
-                    st.session_state.is_webrtc = m["is_webrtc"]
-                    st.session_state.cam_index = m["index"]
-                    st.session_state.cam_mode_label = m["name"]
-                    break
-
-        with cam_col2:
-            if st.button("🔄 Scan", use_container_width=True):
-                st.session_state.detected_cameras = detect_available_cameras(max_tested=4)
-                st.toast("✅ Camera scan completed!")
-                st.rerun()
+        st.markdown(
+            """
+            <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div>
+                        <div style="font-weight: 700; color: #FFFFFF; font-size: 13px;">📷 Front/Integrated Device Camera</div>
+                        <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">Your browser will request permission to stream directly to on-device AI.</div>
+                    </div>
+                    <span style="background: #10B981; color: #000; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 12px;">READY</span>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
         # Privacy & Policy Checkbox
-        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
         agree_privacy = st.checkbox(
             "I agree to the Camera Access & AI Study Sentry Terms of Service.",
             value=True,
-            help="Grants local camera permission for real-time focus proctoring, phone radar & drowsiness sentry."
+            help="Grants camera permission for real-time focus proctoring, phone radar & drowsiness sentry."
         )
 
         with st.expander("📜 View Privacy Policy & Terms of Use"):
@@ -597,6 +579,7 @@ if st.session_state.current_page == "home":
 
         if st.button("🚀  START FOCUS SESSION", use_container_width=True, type="primary", disabled=not agree_privacy):
             st.session_state.current_page = "session"
+            st.session_state.is_webrtc = True
             st.rerun()
 
     with col_features:
@@ -631,7 +614,7 @@ elif st.session_state.current_page == "session":
     header_col1, header_col2 = st.columns([3, 1])
     with header_col1:
         st.markdown(f"<h2 style='margin: 0; color: #FFFFFF;'>🔴 Live Vision Sentry • <span style='color: #818CF8;'>{st.session_state.student_name}</span></h2>", unsafe_allow_html=True)
-        st.markdown(f"<p style='color: #64748B; margin: 0;'>Target: {st.session_state.duration_min}m • Mode: {st.session_state.get('cam_mode_label', 'Browser WebRTC Live')}</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #64748B; margin: 0;'>Target: {st.session_state.duration_min}m • Live Browser Camera Stream</p>", unsafe_allow_html=True)
     with header_col2:
         if st.button("⏹️  END SESSION", use_container_width=True, type="secondary"):
             if "active_session_data" in st.session_state and st.session_state.active_session_data:
@@ -654,18 +637,18 @@ elif st.session_state.current_page == "session":
 
     col_video, col_dash = st.columns([3, 2], gap="large")
 
-    # Cloud WebRTC Streaming Engine (for Streamlit Cloud & Mobile browsers)
     is_webrtc_mode = st.session_state.get("is_webrtc", True)
 
     with col_video:
         if is_webrtc_mode:
-            st.caption("⚡ WebRTC Real-Time Camera Stream • Neural AI Inference running locally.")
+            st.caption("⚡ Live AI Video Stream • Click START below if camera is not automatically active:")
             ctx = webrtc_streamer(
                 key="study-focus-sentry",
                 mode=WebRtcMode.SENDRECV,
                 rtc_configuration=RTC_CONFIG,
                 video_processor_factory=WebRTCVisionProcessor,
                 media_stream_constraints={"video": True, "audio": False},
+                desired_playing_state=True,
                 async_processing=True,
             )
             if ctx.video_processor:
