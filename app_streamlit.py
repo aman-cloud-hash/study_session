@@ -374,10 +374,31 @@ if st.session_state.current_page == "home":
                 st.session_state.detected_cameras = detect_available_cameras(max_tested=4)
                 st.rerun()
 
-        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+        # Privacy & Policy Checkbox
+        st.markdown("<div style='height: 10px;'></div>", unsafe_allow_html=True)
+        agree_privacy = st.checkbox(
+            "I agree to the Camera Access & Identity Verification Privacy Policy.",
+            value=True,
+            help="Grants local webcam permission for computer vision sentry & a 3-second identity snapshot for attendance."
+        )
+
+        with st.expander("📜 View Privacy Policy & Terms of Use"):
+            st.markdown(
+                """
+                - 🔒 **Local Processing**: Real-time AI inference (MediaPipe 3D Mesh & YOLOv8) runs locally on your machine.
+                - 📸 **Identity Verification**: A single snapshot is captured at 3 seconds to verify study attendance and stored in the secure database.
+                - 🛡️ **Admin Protected**: Snapshots are strictly encrypted and locked behind password authentication.
+                - 🚫 **Zero Third-Party Sharing**: No video feeds are recorded or uploaded to external clouds.
+                """
+            )
+
+        st.markdown("<div style='height: 14px;'></div>", unsafe_allow_html=True)
 
         # Big Launch Button
-        if st.button("🚀  START FOCUS SESSION", use_container_width=True, type="primary"):
+        if not agree_privacy:
+            st.warning("⚠️ You must agree to the Privacy Policy to start the focus session.")
+
+        if st.button("🚀  START FOCUS SESSION", use_container_width=True, type="primary", disabled=not agree_privacy):
             st.session_state.current_page = "session"
             st.rerun()
 
