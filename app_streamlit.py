@@ -893,6 +893,14 @@ elif st.session_state.current_page == "session":
                 faceMesh.onResults(onFaceMeshResults);
             }}
 
+            function dist(p1, p2) {{
+                if (!p1 || !p2) return 0;
+                const dx = (p1.x - p2.x);
+                const dy = (p1.y - p2.y);
+                const dz = (p1.z && p2.z) ? (p1.z - p2.z) : 0;
+                return Math.sqrt(dx * dx + dy * dy + dz * dz);
+            }}
+
             function computeEyeEAR(mesh, c1, c2, t1, b1, t2, b2) {{
                 const pC1 = mesh[c1], pC2 = mesh[c2];
                 const pT1 = mesh[t1], pB1 = mesh[b1];
@@ -915,9 +923,15 @@ elif st.session_state.current_page == "session":
                 const rightEAR = computeEyeEAR(mesh, 33, 133, 159, 145, 158, 153);
                 currentAvgEAR = (leftEAR + rightEAR) / 2.0;
 
+                // Center eyelid opening distance ratio
+                const leftCenter = dist(mesh[386], mesh[374]) / Math.max(1e-5, dist(mesh[362], mesh[263]));
+                const rightCenter = dist(mesh[159], mesh[145]) / Math.max(1e-5, dist(mesh[33], mesh[133]));
+                const minCenter = Math.min(leftCenter, rightCenter);
+
+                const isClosed = (currentAvgEAR < 0.28) || (minCenter < 0.17);
+
                 const now = performance.now();
-                // EAR < 0.22 accurately marks closed eyes
-                if (currentAvgEAR < 0.22) {{
+                if (isClosed) {{
                     if (!eyesClosedStart) eyesClosedStart = now;
                     eyeClosedTimer = (now - eyesClosedStart) / 1000;
                     // Trigger alarm after exactly 3.0 seconds of closed eyes
@@ -933,19 +947,20 @@ elif st.session_state.current_page == "session":
 
             let phoneLastSeenTime = 0;
 
-            // 3. Periodic Phone Radar Scan (Strictly CELL PHONE ONLY - Supports flat, tilted, angled & side profiles)
+            // 3. Periodic Phone Radar Scan (Strictly REAL CELL PHONE ONLY - 0.55+ confidence)
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
-                        const predictions = await cocoModel.detect(video, 20, 0.12);
+                        const predictions = await cocoModel.detect(video, 20, 0.40);
                         const matched = predictions.filter(p => {{
                             if (p.class !== 'cell phone') return false;
-                            if (p.score < 0.18) return false;
+                            if (p.score < 0.55) return false;
                             const [x, y, w, h] = p.bbox;
-                            // Supports angled, side-view and tilted phones
                             const maxDim = Math.max(w, h);
                             const minDim = Math.min(w, h);
-                            return (maxDim >= 50 && minDim >= 18);
+                            const aspect = maxDim / Math.max(1, minDim);
+                            // Real phone: reasonable aspect ratio (1.0 to 2.8) and min size
+                            return (maxDim >= 65 && minDim >= 35 && aspect <= 2.8 && aspect >= 1.0);
                         }});
                         phoneDetections = matched;
                         if (matched.length > 0) {{
@@ -953,7 +968,7 @@ elif st.session_state.current_page == "session":
                         }}
                     }} catch (e) {{}}
                 }}
-            }}, 70);
+            }}, 100);
 
             // 4. Periodic FaceMesh Processing (Direct stream, zero hijacking)
             let isProcessingFace = false;
