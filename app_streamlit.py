@@ -969,36 +969,37 @@ elif st.session_state.current_page == "session":
                             skinCount++;
                         }}
                     }}
-                    return (skinCount / total) > 0.40;
+                    // Only reject if box is pure bare hand/fingers (> 70% skin)
+                    return (skinCount / total) > 0.70;
                 }} catch(e) {{
                     return false;
                 }}
             }}
 
             let phoneConsecutiveHits = 0;
-            let phoneLastSeenTime = 0;
+            let phoneLastSeenTime = -999999;
 
-            // 3. Periodic Phone Radar Scan (Strictly REAL CELL PHONE ONLY - Rejects Hands & Fingers)
+            // 3. Periodic Phone Radar Scan (High Sensitivity for Real Phones, Zero Hand False Positives)
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
-                        const predictions = await cocoModel.detect(video, 20, 0.50);
+                        const predictions = await cocoModel.detect(video, 20, 0.25);
                         const matched = predictions.filter(p => {{
                             if (p.class !== 'cell phone') return false;
-                            if (p.score < 0.65) return false; // Strict 65%+ confidence for mobile phones
+                            if (p.score < 0.35) return false; // Sensitive to moving, tilted & silver phones
                             const [x, y, w, h] = p.bbox;
                             const maxDim = Math.max(w, h);
                             const minDim = Math.min(w, h);
                             const aspect = maxDim / Math.max(1, minDim);
                             const area = w * h;
 
-                            // 1. Physical dimensions of a real phone in webcam view
-                            if (maxDim < 80 || minDim < 45 || area < 4500) return false;
+                            // 1. Minimum reasonable phone size
+                            if (maxDim < 45 || minDim < 20 || area < 1200) return false;
 
-                            // 2. Realistic phone aspect ratio (1.2 to 2.6)
-                            if (aspect < 1.2 || aspect > 2.6) return false;
+                            // 2. Reject only extreme needle/line shapes
+                            if (aspect > 3.2) return false;
 
-                            // 3. Reject if the bounding box is predominantly bare skin/fingers/palm
+                            // 3. Reject if the bounding box is pure bare skin/fingers/palm (>70% skin)
                             if (isBareSkinOrHand(video, p.bbox)) return false;
 
                             return true;
@@ -1006,19 +1007,15 @@ elif st.session_state.current_page == "session":
 
                         if (matched.length > 0) {{
                             phoneConsecutiveHits++;
-                            if (phoneConsecutiveHits >= 2) {{
-                                phoneDetections = matched;
-                                phoneLastSeenTime = performance.now();
-                            }}
+                            phoneDetections = matched;
+                            phoneLastSeenTime = performance.now();
                         }} else {{
-                            phoneConsecutiveHits = Math.max(0, phoneConsecutiveHits - 1);
-                            if (phoneConsecutiveHits === 0) {{
-                                phoneDetections = [];
-                            }}
+                            phoneConsecutiveHits = 0;
+                            phoneDetections = [];
                         }}
                     }} catch (e) {{}}
                 }}
-            }}, 100);
+            }}, 80);
 
             // 4. Periodic FaceMesh Processing (Direct stream, zero hijacking)
             let isProcessingFace = false;
@@ -1080,8 +1077,8 @@ elif st.session_state.current_page == "session":
 
             // 6. Start Camera Stream
             async function startCamera(deviceId = null) {{
-                if (audioDrowsy) audioDrowsy.load();
-                if (audioPhone) audioPhone.load();
+                if (audioDrowsy) {{ audioDrowsy.pause(); audioDrowsy.currentTime = 0; }}
+                if (audioPhone) {{ audioPhone.pause(); audioPhone.currentTime = 0; }}
 
                 if (currentStream) {{
                     currentStream.getTracks().forEach(t => t.stop());
@@ -1141,8 +1138,8 @@ elif st.session_state.current_page == "session":
                 if (dt > 0) fps = Math.round(0.9 * fps + 0.1 * (1 / dt));
                 if (fpsBadge) fpsBadge.innerText = fps;
 
-                // Sync Distraction Audio & Visual Alerts (with 1.5s motion hold debounce)
-                const isPhoneActive = (now - phoneLastSeenTime) < 1500;
+                // Sync Distraction Audio & Visual Alerts (Fast 0.6s hold)
+                const isPhoneActive = (phoneLastSeenTime > 0) && ((now - phoneLastSeenTime) < 600);
                 isPhoneDistraction = isPhoneActive;
 
                 if (isPhoneDistraction) {{
