@@ -20,8 +20,9 @@ build/
 *.egg-info/
 *.spec
 
-# Database files (local, regenerated per user)
+# Database files & session snapshots (local, regenerated per user)
 database/*.db
+database/snapshots/
 
 # OS files
 .DS_Store

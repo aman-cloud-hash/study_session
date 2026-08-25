@@ -90,9 +90,18 @@ class EyeDetector:
 
         avg_blink = (blink_left + blink_right) / 2.0
 
-        # 3. Dual-Validation Classification Rule
-        # Eyes are CLOSED if EAR drops below threshold OR blendshape blink score is high (> 0.50)
-        is_closed = (avg_ear < self.ear_threshold) or (avg_blink > 0.50)
+        # 3. Dual-Validation Classification Rule (Enhanced for Glasses & Reflection)
+        # Eyes are CLOSED if:
+        # - avg_ear < threshold (0.26)
+        # - OR either individual eye drops significantly (min(l_ear, r_ear) < 0.23)
+        # - OR blendshape blink score indicates closed eyelids (avg_blink > 0.35 or both eyes > 0.35)
+        blink_thresh = getattr(config, "EYE_BLINK_THRESHOLD", 0.35)
+        is_closed = (
+            (avg_ear < self.ear_threshold)
+            or (min(l_ear, r_ear) < (self.ear_threshold - 0.03))
+            or (avg_blink > blink_thresh)
+            or (blink_left > blink_thresh and blink_right > blink_thresh)
+        )
         eye_status = "CLOSED" if is_closed else "OPEN"
 
         # Extract full eye contours for rendering

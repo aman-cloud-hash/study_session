@@ -140,6 +140,12 @@ class PhoneDetector:
         bw = max(1, x2 - x1)
         bh = max(1, y2 - y1)
 
+        # Minimum physical pixel constraints (prevents narrow fingers / earbuds)
+        min_dim = getattr(config, "PHONE_MIN_DIMENSION_PX", 40)
+        min_longest = getattr(config, "PHONE_MIN_LONGEST_SIDE_PX", 70)
+        if min(bw, bh) < min_dim or max(bw, bh) < min_longest:
+            return False
+
         aspect_ratio = max(bw / bh, bh / bw)
         if not (config.PHONE_MIN_ASPECT_RATIO <= aspect_ratio <= config.PHONE_MAX_ASPECT_RATIO):
             return False
@@ -153,6 +159,33 @@ class PhoneDetector:
 
         return True
 
+    @staticmethod
+    def _is_bare_skin_or_hand(roi_bgr: np.ndarray, max_skin_ratio: float = 0.45) -> bool:
+        """
+        Calculates skin pixel coverage inside the bounding box.
+        If more than max_skin_ratio is bare human skin, it is fingers/palm/arm, NOT a phone.
+        """
+        if roi_bgr is None or roi_bgr.size == 0:
+            return False
+
+        # YCrCb color space skin mask
+        ycrcb = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2YCrCb)
+        cr = ycrcb[:, :, 1]
+        cb = ycrcb[:, :, 2]
+        skin_ycrcb = (cr >= 133) & (cr <= 175) & (cb >= 77) & (cb <= 130)
+
+        # HSV color space skin mask
+        hsv = cv2.cvtColor(roi_bgr, cv2.COLOR_BGR2HSV)
+        h = hsv[:, :, 0]
+        s = hsv[:, :, 1]
+        v = hsv[:, :, 2]
+        skin_hsv = ((h <= 25) | (h >= 170)) & (s >= 25) & (s <= 210) & (v >= 40)
+
+        skin_mask = skin_ycrcb & skin_hsv
+        skin_ratio = float(np.count_nonzero(skin_mask)) / float(roi_bgr.shape[0] * roi_bgr.shape[1])
+
+        return skin_ratio > max_skin_ratio
+
     def _run_inference(self, frame_bgr: np.ndarray) -> None:
         """Execute YOLO inference in background thread."""
         if self._model is None:
@@ -165,11 +198,11 @@ class PhoneDetector:
         effective_conf = getattr(config, "PHONE_DETECTION_CONFIDENCE", self.conf_threshold)
 
         try:
-            # Run YOLO at optimized 320px for high speed (30+ FPS) & high accuracy
+            # Run YOLO with sufficient resolution (480px) and clean confidence threshold
             results = self._model(
                 frame_bgr,
-                imgsz=320,
-                conf=min(0.25, effective_conf),
+                imgsz=480,
+                conf=max(0.40, effective_conf),
                 classes=[config.REMOTE_CLASS_ID, config.PHONE_CLASS_ID],
                 verbose=False,
             )
@@ -186,11 +219,20 @@ class PhoneDetector:
 
                     elif cls_id == config.PHONE_CLASS_ID and conf >= effective_conf:
                         if self._validate_geometry(box_coords, fw, fh):
-                            raw_phone_detections.append({
-                                "box": box_coords,
-                                "conf": round(conf, 2),
-                                "class_name": config.PHONE_CLASS_NAME,
-                            })
+                            # Crop bounding box and reject if it consists of bare fingers/hand/skin
+                            x1_c = max(0, min(fw - 1, x1))
+                            y1_c = max(0, min(fh - 1, y1))
+                            x2_c = max(x1_c + 1, min(fw, x2))
+                            y2_c = max(y1_c + 1, min(fh, y2))
+                            roi = frame_bgr[y1_c:y2_c, x1_c:x2_c]
+
+                            max_skin = getattr(config, "PHONE_MAX_SKIN_RATIO", 0.45)
+                            if not self._is_bare_skin_or_hand(roi, max_skin_ratio=max_skin):
+                                raw_phone_detections.append({
+                                    "box": box_coords,
+                                    "conf": round(conf, 2),
+                                    "class_name": config.PHONE_CLASS_NAME,
+                                })
 
             filtered_phone_detections = []
             for p_det in raw_phone_detections:
@@ -220,6 +262,7 @@ class PhoneDetector:
             filtered_phone_detections = []
 
         raw_detected = len(filtered_phone_detections) > 0
+        required_frames = getattr(config, "PHONE_CONFIRMATION_FRAMES", 2)
 
         with self._lock:
             if raw_detected:
@@ -227,11 +270,12 @@ class PhoneDetector:
                 self._consecutive_misses = 0
                 self._last_valid_detections = filtered_phone_detections
 
-                if not self._is_phone_confirmed and config.DEBUG_LOGGING:
-                    conf_val = filtered_phone_detections[0]["conf"] if filtered_phone_detections else self.conf_threshold
-                    now_str = time.strftime("%H:%M:%S")
-                    print(f"[{now_str}] [PhoneDetector] 📱 Phone detected (confidence={conf_val:.2f})")
-                self._is_phone_confirmed = True
+                if self._consecutive_detections >= required_frames:
+                    if not self._is_phone_confirmed and config.DEBUG_LOGGING:
+                        conf_val = filtered_phone_detections[0]["conf"] if filtered_phone_detections else self.conf_threshold
+                        now_str = time.strftime("%H:%M:%S")
+                        print(f"[{now_str}] [PhoneDetector] 📱 Phone detected (confidence={conf_val:.2f})")
+                    self._is_phone_confirmed = True
             else:
                 self._consecutive_misses += 1
                 self._consecutive_detections = 0

@@ -39,13 +39,14 @@ CAMERA_FPS = 30
 
 # ─── Eye Detection & Drowsiness ───────────────────────────────────────────────
 
-EAR_THRESHOLD = 0.22
+EAR_THRESHOLD = 0.26
+EYE_BLINK_THRESHOLD = 0.35
 
 # Continuous duration (seconds) eyes must remain closed before Drowsiness Alert
-EYE_CLOSED_DURATION_THRESHOLD = 1.2  # Fast 1.2s response
+EYE_CLOSED_DURATION_THRESHOLD = 3.0  # Exactly 3.0s as configured
 
 # Debounce: Seconds of continuous OPEN eyes required to reset closed timer (ignores 1-frame noise)
-EYE_OPEN_DEBOUNCE_SEC = 0.15  # Fast 0.15s recovery
+EYE_OPEN_DEBOUNCE_SEC = 0.20  # Fast 0.20s recovery
 
 FACE_DETECTION_CONFIDENCE = 0.5
 FACE_TRACKING_CONFIDENCE = 0.5
@@ -57,25 +58,32 @@ REMOTE_CLASS_ID = 65      # COCO remote
 
 PHONE_CLASS_NAME = "cell phone"
 
-# High-sensitivity threshold for mobile phones held in hand
-PHONE_DETECTION_CONFIDENCE = 0.30
+# Strict threshold (0.60) to detect ONLY actual mobile phones and reject bare hands/fingers
+PHONE_DETECTION_CONFIDENCE = 0.60
+
+# Max allowed skin ratio in bounding box (if >45% is skin, it's fingers/palm, NOT a phone)
+PHONE_MAX_SKIN_RATIO = 0.45
 
 # Minimum confidence to recognize and suppress remotes
 REMOTE_SUPPRESSION_CONFIDENCE = 0.50
 
-# Instant phone confirmation: 1 positive frame triggers detection immediately
-PHONE_CONFIRMATION_FRAMES = 1
+# Require 2 consecutive frames to confirm phone detection (filters out hand movements/flicker)
+PHONE_CONFIRMATION_FRAMES = 2
 
 # Lost frame persistence: keep phone active for ~0.4s to prevent rapid audio chatter
 PHONE_LOST_FRAMES = 10
 
-# Broad aspect ratio bounds to support phones held at any angle or orientation
-PHONE_MIN_ASPECT_RATIO = 0.5
-PHONE_MAX_ASPECT_RATIO = 4.5
+# Aspect ratio bounds for real smartphones (standard phone aspect ratios: 1.3 - 2.2)
+PHONE_MIN_ASPECT_RATIO = 1.0
+PHONE_MAX_ASPECT_RATIO = 2.8
 
-# Area bounds relative to total frame area
-PHONE_MIN_AREA_RATIO = 0.001
-PHONE_MAX_AREA_RATIO = 0.95
+# Area bounds relative to total frame area (prevents tiny slivers/fingers)
+PHONE_MIN_AREA_RATIO = 0.010
+PHONE_MAX_AREA_RATIO = 0.90
+
+# Minimum physical pixel constraints for webcam (prevents narrow finger crops)
+PHONE_MIN_DIMENSION_PX = 40
+PHONE_MIN_LONGEST_SIDE_PX = 70
 
 # ─── Distraction Engine ──────────────────────────────────────────────────────
 

@@ -91,7 +91,7 @@ class SettingsScreen(ctk.CTkFrame):
             phone_card,
             label="YOLO Phone Detection Confidence:",
             desc="Minimum model confidence required to register a phone.",
-            from_=0.25,
+            from_=0.35,
             to=0.90,
             default=config.PHONE_DETECTION_CONFIDENCE,
             format_str="{:.2f}",
