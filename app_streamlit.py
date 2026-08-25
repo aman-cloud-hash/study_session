@@ -536,18 +536,47 @@ if st.session_state.current_page == "home":
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-        # Camera Permission & Device Helper
-        st.markdown('<div class="section-label">CAMERA HARDWARE & PERMISSION</div>', unsafe_allow_html=True)
+        # Camera Selection for Mobile (Front/Back) & Laptop (Webcam 0/1)
+        st.markdown('<div class="section-label">SELECT CAMERA DEVICE & ORIENTATION</div>', unsafe_allow_html=True)
         
+        cam_options = {
+            "🤳 Front / Selfie Camera (Mobile & Laptop Recommended)": {
+                "constraints": {"video": {"facingMode": "user", "width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
+                "key_suffix": "front"
+            },
+            "📷 Back / Rear Camera (Mobile Desk Mode)": {
+                "constraints": {"video": {"facingMode": "environment", "width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
+                "key_suffix": "back"
+            },
+            "💻 Laptop Integrated HD Webcam (Camera 0)": {
+                "constraints": {"video": {"width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
+                "key_suffix": "laptop_0"
+            },
+            "🔌 External USB WebCam (Camera 1)": {
+                "constraints": {"video": {"width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
+                "key_suffix": "laptop_1"
+            },
+        }
+
+        if "selected_cam_label" not in st.session_state:
+            st.session_state.selected_cam_label = list(cam_options.keys())[0]
+
+        selected_label = st.selectbox(
+            "Select Camera Device",
+            options=list(cam_options.keys()),
+            index=list(cam_options.keys()).index(st.session_state.selected_cam_label),
+            label_visibility="collapsed"
+        )
+        st.session_state.selected_cam_label = selected_label
+        st.session_state.cam_constraints = cam_options[selected_label]["constraints"]
+        st.session_state.cam_key_suffix = cam_options[selected_label]["key_suffix"]
+
         st.markdown(
-            """
-            <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 12px 16px; margin-bottom: 12px;">
+            f"""
+            <div style="background: rgba(99, 102, 241, 0.08); border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px;">
                 <div style="display: flex; align-items: center; justify-content: space-between;">
-                    <div>
-                        <div style="font-weight: 700; color: #FFFFFF; font-size: 13px;">📷 Front/Integrated Device Camera</div>
-                        <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">Your browser will request permission to stream directly to on-device AI.</div>
-                    </div>
-                    <span style="background: #10B981; color: #000; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 12px;">READY</span>
+                    <div style="font-size: 12px; color: #CBD5E1; font-weight: 600;">Hardware Mode: <span style="color: #818CF8;">{selected_label.split('(')[0]}</span></div>
+                    <span style="background: #10B981; color: #000; font-size: 10px; font-weight: 800; padding: 2px 8px; border-radius: 12px;">READY</span>
                 </div>
             </div>
             """,
@@ -614,7 +643,7 @@ elif st.session_state.current_page == "session":
     header_col1, header_col2 = st.columns([3, 1])
     with header_col1:
         st.markdown(f"<h2 style='margin: 0; color: #FFFFFF;'>🔴 Live Vision Sentry • <span style='color: #818CF8;'>{st.session_state.student_name}</span></h2>", unsafe_allow_html=True)
-        st.markdown(f"<p style='color: #64748B; margin: 0;'>Target: {st.session_state.duration_min}m • Live Browser Camera Stream</p>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #64748B; margin: 0;'>Target: {st.session_state.duration_min}m • {st.session_state.get('selected_cam_label', 'Front Camera')}</p>", unsafe_allow_html=True)
     with header_col2:
         if st.button("⏹️  END SESSION", use_container_width=True, type="secondary"):
             if "active_session_data" in st.session_state and st.session_state.active_session_data:
@@ -641,14 +670,18 @@ elif st.session_state.current_page == "session":
 
     with col_video:
         if is_webrtc_mode:
-            st.caption("⚡ Live AI Video Stream • Click START below if camera is not automatically active:")
+            st.caption("⚡ Live AI Video Stream • Click START below to grant browser permission & stream:")
+            cur_constraints = st.session_state.get("cam_constraints", {"video": True, "audio": False})
+            cur_key = f"study_sentry_{st.session_state.get('cam_key_suffix', 'default')}"
+            
             ctx = webrtc_streamer(
-                key="study-focus-sentry",
+                key=cur_key,
                 mode=WebRtcMode.SENDRECV,
                 rtc_configuration=RTC_CONFIG,
                 video_processor_factory=WebRTCVisionProcessor,
-                media_stream_constraints={"video": True, "audio": False},
-                desired_playing_state=True,
+                media_stream_constraints=cur_constraints,
+                video_html_attrs={"autoPlay": True, "controls": False, "muted": True},
+                translations={"start": "▶️  START CAMERA STREAM", "stop": "⏹️  PAUSE STREAM"},
                 async_processing=True,
             )
             if ctx.video_processor:
