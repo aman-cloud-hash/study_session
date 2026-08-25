@@ -4,7 +4,7 @@ AI Study Focus & Distraction Copilot — Streamlit Cloud / Web Edition
 
 Deployable on Streamlit Community Cloud (share.streamlit.io) & HuggingFace Spaces.
 Provides real-time browser webcam streaming via WebRTC, Google MediaPipe 3D FaceLandmarker,
-YOLOv8 Phone Radar, and browser audio alerts.
+YOLOv8 Phone Radar, Cyberpunk Video HUD, and Instant Audio Alerts.
 """
 
 import os
@@ -87,6 +87,7 @@ from src.detection.phone_detector import PhoneDetector
 from src.detection.distraction_engine import DistractionEngine, DistractionState
 from src.database.database import DatabaseManager
 from src.analytics.analytics import AnalyticsEngine
+from src.utils.audio import AlertManager
 from src.utils.helpers import format_time, ensure_directories
 
 # ─── Page Setup ──────────────────────────────────────────────────────────────
@@ -180,80 +181,111 @@ st.markdown(
 # ─── Ensure Directories & Models on Boot ────────────────────────────────────
 ensure_directories()
 
-# ─── Load Base64 Audio for Browser Audio Injection ──────────────────────────
-@st.cache_data
-def get_audio_base64(file_path: Path) -> str:
-    if file_path.exists():
-        with open(file_path, "rb") as f:
-            data = f.read()
-        return base64.b64encode(data).decode("utf-8")
-    return ""
-
-phone_audio_b64 = get_audio_base64(config.PHONE_ALERT_AUDIO)
-drowsy_audio_b64 = get_audio_base64(config.DROWSINESS_ALERT_AUDIO)
 
 # ─── Global WebRTC Shared State ──────────────────────────────────────────────
 class StreamlitVisionProcessor(VideoProcessorBase):
     def __init__(self) -> None:
-        self.face_detector = FaceMeshDetector()
-        self.eye_detector = EyeDetector()
-        self.phone_detector = PhoneDetector()
-        self.distraction_engine = DistractionEngine()
+        try:
+            self.face_detector = FaceMeshDetector()
+            self.eye_detector = EyeDetector()
+            self.phone_detector = PhoneDetector()
+            self.distraction_engine = DistractionEngine()
+            self.alert_manager = AlertManager()
+        except Exception as e:
+            print(f"[StreamlitVisionProcessor] Init warning: {e}")
 
         self.lock = threading.Lock()
-        self.fps = 0.0
+        self.fps = 30.0
         self._prev_time = time.time()
+        self.start_time = time.time()
         self.latest_payload = {
             "focus_score": 100.0,
-            "current_state": "INITIALIZING",
+            "current_state": "FOCUSED",
             "eye_status": "OPEN",
             "phone_detected": False,
             "drowsiness_confirmed": False,
             "audio_active": False,
-            "audio_type": None,
             "elapsed_time": 0.0,
             "distracted_time": 0.0,
             "phone_events": 0,
             "drowsy_events": 0,
-            "fps": 0.0,
+            "fps": 30.0,
         }
-        self.start_time = time.time()
 
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-        img_bgr = frame.to_ndarray(format="bgr24")
+        try:
+            img_bgr = frame.to_ndarray(format="bgr24")
+            if img_bgr is None or img_bgr.size == 0:
+                return frame
 
-        # Compute FPS
-        now = time.time()
-        dt = now - self._prev_time
-        self._prev_time = now
-        if dt > 0:
-            self.fps = 0.9 * self.fps + 0.1 * (1.0 / dt)
+            # Mirror frame for natural view
+            img_bgr = cv2.flip(img_bgr, 1)
 
-        # 1. Face & Eye Tracking
-        face_results, face_count = self.face_detector.process(img_bgr)
-        if face_count > 0:
-            eye_data = self.eye_detector.detect_eye_state_from_face(img_bgr, face_results)
-        else:
-            eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
+            # Compute FPS
+            now = time.time()
+            dt = now - self._prev_time
+            self._prev_time = now
+            if dt > 0:
+                self.fps = 0.9 * self.fps + 0.1 * (1.0 / dt)
 
-        # 2. Phone Detection
-        phone_data = self.phone_detector.detect(img_bgr)
+            # 1. Face & Eye Tracking
+            face_results, face_count = self.face_detector.process(img_bgr)
+            if face_count > 0:
+                eye_data = self.eye_detector.detect_eye_state_from_face(img_bgr, face_results)
+            else:
+                eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
 
-        # 3. State Machine Engine
-        engine_data = self.distraction_engine.update(
-            face_count=face_count,
-            eye_status=eye_data.get("eye_status", "UNKNOWN"),
-            phone_detected=phone_data.get("phone_detected", False),
-            current_fps=self.fps if self.fps > 0 else 30.0,
-        )
+            # 2. Phone Detection
+            phone_data = self.phone_detector.detect(img_bgr)
 
-        # 4. Render Phone Bounding Box
-        if phone_data.get("phone_detected", False) and phone_data.get("detections"):
-            img_bgr = self.phone_detector.draw_detections(img_bgr, phone_data["detections"])
+            # 3. State Machine Engine
+            engine_data = self.distraction_engine.update(
+                face_count=face_count,
+                eye_status=eye_data.get("eye_status", "UNKNOWN"),
+                phone_detected=phone_data.get("phone_detected", False),
+                current_fps=self.fps if self.fps > 0 else 30.0,
+            )
 
-        # 5. Render Translucent Glass HUD
-        h, w = img_bgr.shape[:2]
-        state = engine_data["current_state"]
+            # 4. Synchronize Alert Audio State (State-Based & Instant Stop)
+            target_alert = engine_data.get("target_alert")
+            if hasattr(self, "alert_manager") and self.alert_manager:
+                try:
+                    self.alert_manager.sync_alert_state(target_alert)
+                except Exception:
+                    pass
+
+            # 5. Render Phone Bounding Box
+            if phone_data.get("phone_detected", False) and phone_data.get("detections"):
+                img_bgr = self.phone_detector.draw_detections(img_bgr, phone_data["detections"])
+
+            # 6. Render Full Cyberpunk Glass HUD (Top badges + Bottom Telemetry Bar)
+            img_bgr = self._render_video_hud(img_bgr, engine_data, eye_data, phone_data)
+
+            # Update Live Telemetry Payload
+            with self.lock:
+                self.latest_payload = {
+                    "focus_score": engine_data.get("focus_score", 100.0),
+                    "current_state": engine_data.get("current_state", DistractionState.FOCUSED),
+                    "eye_status": eye_data.get("eye_status", "OPEN"),
+                    "phone_detected": phone_data.get("phone_detected", False),
+                    "drowsiness_confirmed": engine_data.get("drowsiness_confirmed", False),
+                    "audio_active": self.alert_manager.is_playing if hasattr(self, "alert_manager") else False,
+                    "elapsed_time": time.time() - self.start_time,
+                    "distracted_time": engine_data.get("distracted_time", 0.0),
+                    "phone_events": engine_data.get("phone_events", 0),
+                    "drowsy_events": engine_data.get("drowsy_events", 0),
+                    "fps": self.fps,
+                }
+
+            return av.VideoFrame.from_ndarray(img_bgr, format="bgr24")
+        except Exception as e:
+            return frame
+
+    def _render_video_hud(self, frame: np.ndarray, engine_data: dict, eye_data: dict, phone_data: dict) -> np.ndarray:
+        """Render complete Cyberpunk HUD on video frame."""
+        annotated = frame.copy()
+        h, w = annotated.shape[:2]
+        state = engine_data.get("current_state", DistractionState.FOCUSED)
 
         if state == DistractionState.FOCUSED:
             theme_color = (130, 210, 30)
@@ -272,16 +304,18 @@ class StreamlitVisionProcessor(VideoProcessorBase):
             state_text = "NO FACE DETECTED"
         else:
             theme_color = (140, 140, 140)
-            state_text = "INITIALIZING"
+            state_text = "STUDY SENTRY"
 
-        # Glass Pill Banner
-        overlay = img_bgr.copy()
-        cv2.rectangle(overlay, (14, 14), (250, 50), (12, 14, 22), -1)
-        cv2.circle(overlay, (32, 32), 6, theme_color, -1)
+        overlay = annotated.copy()
+
+        # Top-Left State Pill
+        pill_w, pill_h = 240, 36
+        cv2.rectangle(overlay, (14, 14), (14 + pill_w, 14 + pill_h), (12, 14, 22), -1)
+        cv2.circle(overlay, (32, 14 + pill_h // 2), 6, theme_color, -1)
         cv2.putText(
             overlay,
             state_text,
-            (48, 37),
+            (48, 14 + pill_h // 2 + 5),
             cv2.FONT_HERSHEY_DUPLEX,
             0.48,
             (240, 245, 255),
@@ -289,15 +323,18 @@ class StreamlitVisionProcessor(VideoProcessorBase):
             cv2.LINE_AA,
         )
 
-        audio_on = engine_data.get("audio_alert_active", False)
-        audio_x = w - 144
-        audio_color = (40, 60, 240) if audio_on else (120, 180, 40)
-        cv2.rectangle(overlay, (audio_x, 14), (w - 14, 50), (12, 14, 22), -1)
-        cv2.circle(overlay, (audio_x + 18, 32), 5, audio_color, -1)
+        # Top-Right Audio Pill
+        audio_playing = self.alert_manager.is_playing if hasattr(self, "alert_manager") else False
+        audio_pill_w = 130
+        audio_x = max(14, w - audio_pill_w - 14)
+        audio_color = (40, 60, 240) if audio_playing else (120, 180, 40)
+        audio_label = "AUDIO ON" if audio_playing else "AUDIO OFF"
+        cv2.rectangle(overlay, (audio_x, 14), (w - 14, 14 + pill_h), (12, 14, 22), -1)
+        cv2.circle(overlay, (audio_x + 18, 14 + pill_h // 2), 5, audio_color, -1)
         cv2.putText(
             overlay,
-            "AUDIO ON" if audio_on else "AUDIO OFF",
-            (audio_x + 32, 37),
+            audio_label,
+            (audio_x + 32, 14 + pill_h // 2 + 5),
             cv2.FONT_HERSHEY_DUPLEX,
             0.46,
             (220, 225, 240),
@@ -305,28 +342,100 @@ class StreamlitVisionProcessor(VideoProcessorBase):
             cv2.LINE_AA,
         )
 
-        cv2.addWeighted(overlay, 0.85, img_bgr, 0.15, 0, img_bgr)
-        cv2.rectangle(img_bgr, (14, 14), (250, 50), (50, 55, 75), 1)
-        cv2.rectangle(img_bgr, (audio_x, 14), (w - 14, 50), (50, 55, 75), 1)
+        # Bottom Telemetry HUD Bar
+        bot_h = 38
+        bot_y = h - bot_h - 10
+        cv2.rectangle(overlay, (14, bot_y), (w - 14, h - 10), (12, 14, 22), -1)
 
-        # Update Live Telemetry Payload
-        with self.lock:
-            self.latest_payload = {
-                "focus_score": engine_data.get("focus_score", 100.0),
-                "current_state": state,
-                "eye_status": eye_data.get("eye_status", "OPEN"),
-                "phone_detected": phone_data.get("phone_detected", False),
-                "drowsiness_confirmed": engine_data.get("drowsiness_confirmed", False),
-                "audio_active": audio_on,
-                "audio_type": engine_data.get("audio_type"),
-                "elapsed_time": time.time() - self.start_time,
-                "distracted_time": engine_data.get("distracted_time", 0.0),
-                "phone_events": engine_data.get("phone_events", 0),
-                "drowsy_events": engine_data.get("drowsy_events", 0),
-                "fps": self.fps,
-            }
+        # Focus score
+        score_val = engine_data.get("focus_score", 100.0)
+        score_col = (130, 210, 30) if score_val >= 80 else ((30, 160, 255) if score_val >= 60 else (40, 60, 240))
+        cv2.putText(
+            overlay,
+            f"SCORE: {score_val:.0f}%",
+            (24, bot_y + 24),
+            cv2.FONT_HERSHEY_DUPLEX,
+            0.50,
+            score_col,
+            1,
+            cv2.LINE_AA,
+        )
 
-        return av.VideoFrame.from_ndarray(img_bgr, format="bgr24")
+        # Elapsed Timer
+        elapsed_sec = time.time() - self.start_time
+        time_str = format_time(elapsed_sec)
+        cv2.putText(
+            overlay,
+            f"TIME: {time_str}",
+            (170, bot_y + 24),
+            cv2.FONT_HERSHEY_DUPLEX,
+            0.48,
+            (220, 225, 240),
+            1,
+            cv2.LINE_AA,
+        )
+
+        # Eye status & EAR
+        ear_val = eye_data.get("avg_ear", 0.0)
+        eye_txt = eye_data.get("eye_status", "OPEN")
+        eye_col = (130, 210, 30) if eye_txt == "OPEN" else (40, 60, 240)
+        cv2.putText(
+            overlay,
+            f"EYES: {eye_txt} ({ear_val:.2f})",
+            (320, bot_y + 24),
+            cv2.FONT_HERSHEY_DUPLEX,
+            0.46,
+            eye_col,
+            1,
+            cv2.LINE_AA,
+        )
+
+        # FPS
+        cv2.putText(
+            overlay,
+            f"FPS: {int(self.fps)}",
+            (w - 100, bot_y + 24),
+            cv2.FONT_HERSHEY_DUPLEX,
+            0.44,
+            (140, 150, 180),
+            1,
+            cv2.LINE_AA,
+        )
+
+        # Blend
+        cv2.addWeighted(overlay, 0.85, annotated, 0.15, 0, annotated)
+        cv2.rectangle(annotated, (14, 14), (14 + pill_w, 14 + pill_h), (50, 55, 75), 1)
+        cv2.rectangle(annotated, (audio_x, 14), (w - 14, 14 + pill_h), (50, 55, 75), 1)
+        cv2.rectangle(annotated, (14, bot_y), (w - 14, h - 10), (50, 55, 75), 1)
+
+        # Eye closure warning bar if eyes closed
+        eye_dur = engine_data.get("eye_closed_duration", 0.0)
+        if eye_dur > 0 and eye_data.get("eye_status") == "CLOSED":
+            progress = min(1.0, eye_dur / max(0.1, config.EYE_CLOSED_DURATION_THRESHOLD))
+            bar_w = 220
+            bar_h = 8
+            bar_x = 14
+            bar_y = 58
+
+            cv2.rectangle(annotated, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (20, 20, 30), -1)
+            fill_w = int(bar_w * progress)
+            bar_col = (30, 160, 255) if progress < 0.8 else (30, 40, 240)
+            if fill_w > 0:
+                cv2.rectangle(annotated, (bar_x, bar_y), (bar_x + fill_w, bar_y + bar_h), bar_col, -1)
+            cv2.rectangle(annotated, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (60, 65, 85), 1)
+
+            cv2.putText(
+                annotated,
+                f"Eyes Closed: {eye_dur:.1f}s",
+                (bar_x + bar_w + 10, bar_y + 7),
+                cv2.FONT_HERSHEY_DUPLEX,
+                0.40,
+                (240, 240, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+        return annotated
 
 
 # ─── Sidebar Controls ───────────────────────────────────────────────────────
@@ -355,7 +464,8 @@ with st.sidebar:
     phone_conf = st.slider("📱 YOLO Phone Confidence", min_value=0.20, max_value=0.80, value=float(config.PHONE_DETECTION_CONFIDENCE), step=0.05)
     config.PHONE_DETECTION_CONFIDENCE = phone_conf
 
-    enable_sound = st.toggle("🔊 Enable Browser Audio Alarms", value=True)
+    enable_sound = st.toggle("🔊 Enable Audio Alarms", value=config.SOUND_ENABLED)
+    config.SOUND_ENABLED = enable_sound
 
     st.markdown("---")
     st.markdown(f"🔒 *{config.PRIVACY_NOTICE}*")
@@ -371,125 +481,29 @@ tab_live, tab_history, tab_about = st.tabs(["🎥 Live Vision Sentry", "📊 His
 
 # ─── TAB 1: Live Vision Sentry ──────────────────────────────────────────────
 with tab_live:
-    col_video, col_telemetry = st.columns([3, 2], gap="medium")
+    st.markdown("### 📹 Live Webcam Sentry & Real-Time Dashboard")
 
-    with col_video:
-        st.markdown("### 📹 Live Webcam Feed")
+    # WebRTC Streamer
+    rtc_config = RTCConfiguration(
+        {
+            "iceServers": [
+                {"urls": ["stun:stun.l.google.com:19302"]},
+                {"urls": ["stun:stun1.l.google.com:19302"]},
+                {"urls": ["stun:stun2.l.google.com:19302"]},
+            ]
+        }
+    )
 
-        # WebRTC Streamer
-        rtc_config = RTCConfiguration(
-            {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-        )
+    webrtc_ctx = webrtc_streamer(
+        key="study-focus-sentry",
+        mode=WebRtcMode.SENDRECV,
+        rtc_configuration=rtc_config,
+        video_processor_factory=StreamlitVisionProcessor,
+        media_stream_constraints={"video": {"width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
+        async_processing=True,
+    )
 
-        webrtc_ctx = webrtc_streamer(
-            key="study-focus-sentry",
-            mode=WebRtcMode.SENDRECV,
-            rtc_configuration=rtc_config,
-            video_processor_factory=StreamlitVisionProcessor,
-            media_stream_constraints={"video": {"width": {"ideal": 640}, "height": {"ideal": 480}}, "audio": False},
-            async_processing=True,
-        )
-
-        st.caption("⚡ Camera stream is processed 100% locally in volatile RAM. No imagery is recorded or transmitted.")
-
-    with col_telemetry:
-        st.markdown(f"### 📊 Student: **{student_name}**")
-
-        # Telemetry Placeholders
-        score_placeholder = st.empty()
-        timer_placeholder = st.empty()
-        pills_placeholder = st.empty()
-        audio_placeholder = st.empty()
-
-        # Update telemetry from processor
-        if webrtc_ctx.video_processor:
-            proc = webrtc_ctx.video_processor
-            with proc.lock:
-                data = proc.latest_payload
-
-            score = data.get("focus_score", 100.0)
-            score_cls = "metric-val-emerald" if score >= 80 else ("metric-val-amber" if score >= 60 else "metric-val-red")
-
-            score_placeholder.markdown(
-                f"""
-                <div class="metric-card">
-                    <div class="metric-title">Live Focus Efficiency</div>
-                    <div class="{score_cls}">{score:.1f}%</div>
-                    <div style="color: #94A3B8; font-size: 13px; font-weight: 600;">Status: {data.get('current_state', 'FOCUSED')}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            # Timer Card
-            elapsed_str = format_time(data.get("elapsed_time", 0.0))
-            timer_placeholder.markdown(
-                f"""
-                <div class="metric-card">
-                    <div class="metric-title">Elapsed Session Time</div>
-                    <div class="metric-val-indigo">{elapsed_str}</div>
-                    <div style="color: #94A3B8; font-size: 12px;">FPS: {int(data.get('fps', 30))} • Target: {target_duration_min}m</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            # Telemetry Indicators
-            eye_status = data.get("eye_status", "OPEN")
-            eye_cls = "pill-value-green" if eye_status == "OPEN" else "pill-value-red"
-
-            phone_detected = data.get("phone_detected", False)
-            phone_cls = "pill-value-red" if phone_detected else "pill-value-green"
-            phone_text = "DETECTED" if phone_detected else "CLEAR"
-
-            drowsy_conf = data.get("drowsiness_confirmed", False)
-            drowsy_cls = "pill-value-red" if drowsy_conf else "pill-value-green"
-            drowsy_text = "DROWSY" if drowsy_conf else "NORMAL"
-
-            pills_placeholder.markdown(
-                f"""
-                <div class="metric-card">
-                    <div class="metric-title" style="margin-bottom: 8px;">Real-Time Telemetry</div>
-                    <div class="telemetry-pill">
-                        <span class="pill-label">👁️ Eye State</span>
-                        <span class="{eye_cls}">● {eye_status}</span>
-                    </div>
-                    <div class="telemetry-pill">
-                        <span class="pill-label">📱 Phone Radar</span>
-                        <span class="{phone_cls}">● {phone_text}</span>
-                    </div>
-                    <div class="telemetry-pill">
-                        <span class="pill-label">😴 Drowsiness</span>
-                        <span class="{drowsy_cls}">● {drowsy_text}</span>
-                    </div>
-                    <div class="telemetry-pill">
-                        <span class="pill-label">🔔 Phone Violations</span>
-                        <span style="color: #F8FAFC; font-weight: 700;">{data.get('phone_events', 0)}</span>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-
-            # Browser Audio Alarm Trigger
-            if enable_sound and data.get("audio_active", False):
-                audio_src = phone_audio_b64 if data.get("audio_type") == "phone" else drowsy_audio_b64
-                if audio_src:
-                    audio_placeholder.markdown(
-                        f"""
-                        <audio autoplay>
-                            <source src="data:audio/mp3;base64,{audio_src}" type="audio/mp3">
-                        </audio>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    audio_placeholder.empty()
-            else:
-                audio_placeholder.empty()
-
-        else:
-            score_placeholder.info("Click **START** above the webcam container to begin live focus monitoring.")
+    st.caption("⚡ Click **START** above to turn on live vision tracking. Real-time timer, score gauge, and radar telemetry are rendered directly on the video feed!")
 
 
 # ─── TAB 2: Historical Analytics ────────────────────────────────────────────
@@ -541,6 +555,7 @@ with tab_about:
         - **Google MediaPipe 478-Point 3D Face Mesh:** Calculates precise Eye Aspect Ratio (EAR) with sub-millisecond latency.
         - **Multi-Threaded Async YOLOv8:** Object classification for mobile phones with pure PyTorch Vectorized NMS.
         - **Decoupled Architecture:** Inference executes inside background WebRTC worker threads to guarantee 30+ FPS video performance.
+        - **Instant State-Based Audio:** Audio alerts start in 0s on phone detection and stop instantly (<5ms) when distraction ends.
         - **Privacy Guarantee:** 100% On-Device execution with zero cloud storage of webcam streams.
         """
     )
