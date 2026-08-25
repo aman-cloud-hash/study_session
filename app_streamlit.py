@@ -945,26 +945,76 @@ elif st.session_state.current_page == "session":
                 }}
             }}
 
+            const skinProbeCanvas = document.createElement('canvas');
+            skinProbeCanvas.width = 32;
+            skinProbeCanvas.height = 32;
+            const skinProbeCtx = skinProbeCanvas.getContext('2d', {{ willReadFrequently: true }});
+
+            function isBareSkinOrHand(videoEl, bbox) {{
+                try {{
+                    const [bx, by, bw, bh] = bbox;
+                    if (bw <= 0 || bh <= 0 || !videoEl || !videoEl.videoWidth) return false;
+                    skinProbeCtx.drawImage(videoEl, Math.max(0, bx), Math.max(0, by), bw, bh, 0, 0, 32, 32);
+                    const imgData = skinProbeCtx.getImageData(0, 0, 32, 32).data;
+                    let skinCount = 0;
+                    const total = 32 * 32;
+                    for (let i = 0; i < imgData.length; i += 4) {{
+                        const r = imgData[i];
+                        const g = imgData[i + 1];
+                        const b = imgData[i + 2];
+                        const maxVal = Math.max(r, g, b);
+                        const minVal = Math.min(r, g, b);
+                        // Human skin chrominance condition in RGB
+                        if (r > 75 && g > 35 && b > 20 && (maxVal - minVal) > 12 && r > g && r > b) {{
+                            skinCount++;
+                        }}
+                    }}
+                    return (skinCount / total) > 0.40;
+                }} catch(e) {{
+                    return false;
+                }}
+            }}
+
+            let phoneConsecutiveHits = 0;
             let phoneLastSeenTime = 0;
 
-            // 3. Periodic Phone Radar Scan (Strictly REAL CELL PHONE ONLY - 0.55+ confidence)
+            // 3. Periodic Phone Radar Scan (Strictly REAL CELL PHONE ONLY - Rejects Hands & Fingers)
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
-                        const predictions = await cocoModel.detect(video, 20, 0.40);
+                        const predictions = await cocoModel.detect(video, 20, 0.50);
                         const matched = predictions.filter(p => {{
                             if (p.class !== 'cell phone') return false;
-                            if (p.score < 0.55) return false;
+                            if (p.score < 0.65) return false; // Strict 65%+ confidence for mobile phones
                             const [x, y, w, h] = p.bbox;
                             const maxDim = Math.max(w, h);
                             const minDim = Math.min(w, h);
                             const aspect = maxDim / Math.max(1, minDim);
-                            // Real phone: reasonable aspect ratio (1.0 to 2.8) and min size
-                            return (maxDim >= 65 && minDim >= 35 && aspect <= 2.8 && aspect >= 1.0);
+                            const area = w * h;
+
+                            // 1. Physical dimensions of a real phone in webcam view
+                            if (maxDim < 80 || minDim < 45 || area < 4500) return false;
+
+                            // 2. Realistic phone aspect ratio (1.2 to 2.6)
+                            if (aspect < 1.2 || aspect > 2.6) return false;
+
+                            // 3. Reject if the bounding box is predominantly bare skin/fingers/palm
+                            if (isBareSkinOrHand(video, p.bbox)) return false;
+
+                            return true;
                         }});
-                        phoneDetections = matched;
+
                         if (matched.length > 0) {{
-                            phoneLastSeenTime = performance.now();
+                            phoneConsecutiveHits++;
+                            if (phoneConsecutiveHits >= 2) {{
+                                phoneDetections = matched;
+                                phoneLastSeenTime = performance.now();
+                            }}
+                        }} else {{
+                            phoneConsecutiveHits = Math.max(0, phoneConsecutiveHits - 1);
+                            if (phoneConsecutiveHits === 0) {{
+                                phoneDetections = [];
+                            }}
                         }}
                     }} catch (e) {{}}
                 }}
