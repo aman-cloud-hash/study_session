@@ -100,7 +100,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ─── Ultra-Premium Dark Glassmorphic Design System ───────────────────────────
+# ─── Ultra-Premium Dark Glassmorphic Design System (Mobile & Desktop Responsive) ───
 st.markdown(
     """
     <style>
@@ -111,24 +111,33 @@ st.markdown(
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     
+    /* Main Content Container Padding */
+    .block-container {
+        padding-top: 1.5rem !important;
+        padding-bottom: 2rem !important;
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+        max-width: 1280px;
+    }
+
     /* Top Navbar */
     .nav-bar {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 12px 24px;
+        padding: 12px 20px;
         background: #12141F;
         border: 1px solid #1F2338;
         border-radius: 16px;
-        margin-bottom: 24px;
+        margin-bottom: 20px;
     }
     .nav-brand {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 10px;
     }
     .nav-title {
-        font-size: 18px;
+        font-size: clamp(14px, 3.5vw, 18px);
         font-weight: 800;
         color: #FFFFFF;
         letter-spacing: -0.5px;
@@ -137,14 +146,14 @@ st.markdown(
     /* Glowing Hero Badge */
     .hero-badge {
         display: inline-block;
-        padding: 5px 14px;
+        padding: 4px 12px;
         background: rgba(79, 70, 229, 0.15);
         border: 1px solid rgba(99, 102, 241, 0.4);
         border-radius: 20px;
         color: #A5B4FC;
-        font-size: 11px;
+        font-size: clamp(10px, 2.5vw, 11px);
         font-weight: 700;
-        letter-spacing: 1px;
+        letter-spacing: 0.8px;
         text-transform: uppercase;
         margin-bottom: 8px;
     }
@@ -154,15 +163,15 @@ st.markdown(
         background: #12141F;
         border: 1px solid #1F2338;
         border-radius: 18px;
-        padding: 24px;
-        margin-bottom: 20px;
+        padding: clamp(16px, 3vw, 24px);
+        margin-bottom: 16px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
     }
     .card-title {
         color: #F8FAFC;
-        font-size: 18px;
+        font-size: clamp(15px, 3.5vw, 18px);
         font-weight: 800;
-        margin-bottom: 16px;
+        margin-bottom: 14px;
     }
     .section-label {
         color: #64748B;
@@ -178,27 +187,27 @@ st.markdown(
         background: linear-gradient(145deg, #141724 0%, #0E101A 100%);
         border: 1px solid #1F2338;
         border-radius: 18px;
-        padding: 22px;
+        padding: clamp(16px, 3vw, 22px);
         text-align: center;
         margin-bottom: 14px;
     }
     .gauge-val-emerald {
         color: #10B981;
-        font-size: 52px;
+        font-size: clamp(34px, 8vw, 52px);
         font-weight: 900;
         letter-spacing: -1px;
         text-shadow: 0 0 25px rgba(16, 185, 129, 0.35);
     }
     .gauge-val-amber {
         color: #F59E0B;
-        font-size: 52px;
+        font-size: clamp(34px, 8vw, 52px);
         font-weight: 900;
         letter-spacing: -1px;
         text-shadow: 0 0 25px rgba(245, 158, 11, 0.35);
     }
     .gauge-val-red {
         color: #EF4444;
-        font-size: 52px;
+        font-size: clamp(34px, 8vw, 52px);
         font-weight: 900;
         letter-spacing: -1px;
         text-shadow: 0 0 25px rgba(239, 68, 68, 0.35);
@@ -209,11 +218,11 @@ st.markdown(
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 10px 14px;
+        padding: 9px 12px;
         background: #181B2B;
         border-radius: 10px;
         margin-bottom: 8px;
-        font-size: 13px;
+        font-size: clamp(11px, 2.8vw, 13px);
     }
     .t-label { color: #94A3B8; font-weight: 600; }
     .t-val-green { color: #10B981; font-weight: 800; }
@@ -225,19 +234,44 @@ st.markdown(
         background: #141724;
         border: 1px solid #1F2338;
         border-radius: 14px;
-        padding: 16px;
-        margin-bottom: 12px;
+        padding: 14px;
+        margin-bottom: 10px;
     }
-    .feat-title { color: #FFFFFF; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
-    .feat-desc { color: #94A3B8; font-size: 12px; line-height: 1.4; }
+    .feat-title { color: #FFFFFF; font-size: clamp(13px, 3vw, 14px); font-weight: 700; margin-bottom: 3px; }
+    .feat-desc { color: #94A3B8; font-size: clamp(11px, 2.5vw, 12px); line-height: 1.4; }
     
     /* Clean Button Styling */
     div.stButton > button:first-child {
         border-radius: 12px;
         font-weight: 700;
-        padding: 10px 20px;
+        padding: 10px 16px;
         border: none;
         transition: all 0.2s ease;
+        min-height: 44px;
+    }
+
+    /* 📱 MOBILE RESPONSIVE MEDIA QUERIES (<768px) */
+    @media screen and (max-width: 768px) {
+        .block-container {
+            padding-left: 0.5rem !important;
+            padding-right: 0.5rem !important;
+            padding-top: 0.8rem !important;
+        }
+        h1 {
+            font-size: 24px !important;
+        }
+        h2 {
+            font-size: 20px !important;
+        }
+        .card-surface {
+            padding: 14px !important;
+            border-radius: 14px !important;
+            margin-bottom: 12px !important;
+        }
+        div.stButton > button:first-child {
+            padding: 8px 12px !important;
+            font-size: 13px !important;
+        }
     }
     </style>
     """,
@@ -264,37 +298,37 @@ if "cam_index" not in st.session_state:
 if "last_session_stats" not in st.session_state:
     st.session_state.last_session_stats = None
 
-# ─── Modern Top Navigation Bar ──────────────────────────────────────────────
-nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([4, 1.2, 1.2, 1.2])
+# ─── Modern Top Navigation Bar (Mobile & Desktop Fluid) ──────────────────────
+nav_brand_col, nav_tabs_col = st.columns([1.6, 2.0], gap="medium")
 
-with nav_col1:
+with nav_brand_col:
     st.markdown(
         """
         <div style="display: flex; align-items: center; gap: 10px; padding: 4px 0;">
             <span style="font-size: 24px;">🎯</span>
             <div>
-                <div style="font-size: 17px; font-weight: 800; color: #FFFFFF;">AI STUDY FOCUS COPILOT</div>
-                <div style="font-size: 11px; color: #818CF8; font-weight: 700;">NEXT-GEN VISION SENTINEL</div>
+                <div style="font-size: clamp(15px, 3.5vw, 17px); font-weight: 800; color: #FFFFFF;">AI STUDY FOCUS COPILOT</div>
+                <div style="font-size: clamp(10px, 2.5vw, 11px); color: #818CF8; font-weight: 700;">NEXT-GEN VISION SENTINEL</div>
             </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-with nav_col2:
-    if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
-        st.session_state.current_page = "home"
-        st.rerun()
-
-with nav_col3:
-    if st.button("📊 History", use_container_width=True, type="primary" if st.session_state.current_page == "history" else "secondary"):
-        st.session_state.current_page = "history"
-        st.rerun()
-
-with nav_col4:
-    if st.button("⚙️ Settings", use_container_width=True, type="primary" if st.session_state.current_page == "settings" else "secondary"):
-        st.session_state.current_page = "settings"
-        st.rerun()
+with nav_tabs_col:
+    tcol1, tcol2, tcol3 = st.columns(3)
+    with tcol1:
+        if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
+            st.session_state.current_page = "home"
+            st.rerun()
+    with tcol2:
+        if st.button("📊 History", use_container_width=True, type="primary" if st.session_state.current_page == "history" else "secondary"):
+            st.session_state.current_page = "history"
+            st.rerun()
+    with tcol3:
+        if st.button("⚙️ Settings", use_container_width=True, type="primary" if st.session_state.current_page == "settings" else "secondary"):
+            st.session_state.current_page = "settings"
+            st.rerun()
 
 st.markdown("<hr style='border: 0; height: 1px; background: #1F2338; margin: 8px 0 20px 0;'>", unsafe_allow_html=True)
 
