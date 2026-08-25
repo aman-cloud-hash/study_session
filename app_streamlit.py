@@ -893,32 +893,33 @@ elif st.session_state.current_page == "session":
                 faceMesh.onResults(onFaceMeshResults);
             }}
 
-            function dist(p1, p2) {{
-                return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+            function computeEyeEAR(mesh, c1, c2, t1, b1, t2, b2) {{
+                const pC1 = mesh[c1], pC2 = mesh[c2];
+                const pT1 = mesh[t1], pB1 = mesh[b1];
+                const pT2 = mesh[t2], pB2 = mesh[b2];
+                const v1 = dist(pT1, pB1);
+                const v2 = dist(pT2, pB2);
+                const h = 2.0 * dist(pC1, pC2);
+                return h > 0 ? ((v1 + v2) / h) : 0.30;
             }}
 
-            function computeEAR(mesh, idxs) {{
-                const p1 = mesh[idxs[0]], p2 = mesh[idxs[1]], p3 = mesh[idxs[2]];
-                const p4 = mesh[idxs[3]], p5 = mesh[idxs[4]], p6 = mesh[idxs[5]];
-                const vertical = dist(p2, p6) + dist(p3, p5);
-                const horizontal = 2.0 * dist(p1, p4);
-                return horizontal > 0 ? (vertical / horizontal) : 0.3;
-            }}
+            let currentAvgEAR = 0.30;
 
             function onFaceMeshResults(results) {{
                 if (!results.multiFaceLandmarks || results.multiFaceLandmarks.length === 0) {{
                     return;
                 }}
                 const mesh = results.multiFaceLandmarks[0];
-                const leftEAR = computeEAR(mesh, [362, 385, 387, 263, 373, 380]);
-                const rightEAR = computeEAR(mesh, [33, 160, 158, 133, 153, 144]);
-                const avgEAR = (leftEAR + rightEAR) / 2.0;
+                const leftEAR = computeEyeEAR(mesh, 362, 263, 386, 374, 385, 380);
+                const rightEAR = computeEyeEAR(mesh, 33, 133, 159, 145, 158, 153);
+                currentAvgEAR = (leftEAR + rightEAR) / 2.0;
 
                 const now = performance.now();
-                if (avgEAR < 0.22) {{
+                // 0.255 threshold accommodates spectacles and natural blinks
+                if (currentAvgEAR < 0.255) {{
                     if (!eyesClosedStart) eyesClosedStart = now;
                     eyeClosedTimer = (now - eyesClosedStart) / 1000;
-                    // Trigger sound after 3 full seconds of closed eyes
+                    // Trigger alarm after 3 full seconds of closed eyes
                     if (eyeClosedTimer >= 3.0) {{
                         isDrowsyDistraction = true;
                     }}
@@ -931,13 +932,13 @@ elif st.session_state.current_page == "session":
 
             let phoneLastSeenTime = 0;
 
-            // 3. Periodic Phone Radar Scan (Strictly filtered for Mobile Phone / Cell Phone / Remote)
-            const targetClasses = ['cell phone', 'remote', 'telephone'];
+            // 3. Periodic Phone Radar Scan (Strictly filtered for Cell Phone & Remote ONLY)
+            const targetClasses = ['cell phone', 'remote'];
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
-                        const predictions = await cocoModel.detect(video, 20, 0.10);
-                        const matched = predictions.filter(p => targetClasses.includes(p.class) && p.score >= 0.16);
+                        const predictions = await cocoModel.detect(video, 20, 0.15);
+                        const matched = predictions.filter(p => targetClasses.includes(p.class) && p.score >= 0.26);
                         phoneDetections = matched;
                         if (matched.length > 0) {{
                             phoneLastSeenTime = performance.now();
