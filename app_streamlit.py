@@ -931,24 +931,13 @@ elif st.session_state.current_page == "session":
 
             let phoneLastSeenTime = 0;
 
-            // 3. Periodic Ultra-Sensitive Phone Radar Scan (Every 70ms with deep low-threshold candidate search)
-            const targetClasses = ['cell phone', 'remote', 'laptop', 'tablet', 'book', 'mouse', 'bottle', 'cup', 'hand', 'camera', 'telephone'];
+            // 3. Periodic Phone Radar Scan (Strictly filtered for Mobile Phone / Cell Phone / Remote)
+            const targetClasses = ['cell phone', 'remote', 'telephone'];
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
-                        // Pass minScore=0.04 directly into model to prevent internal 0.50 cutoff
-                        const predictions = await cocoModel.detect(video, 40, 0.04);
-                        const matched = predictions.filter(p => {{
-                            if (targetClasses.includes(p.class) && p.score >= 0.06) {{
-                                return true;
-                            }}
-                            if (p.class !== 'person' && p.score >= 0.08) {{
-                                const [x, y, w, h] = p.bbox;
-                                const aspect = h / (w || 1);
-                                if ((aspect > 1.1 || aspect < 0.9) && w > 35 && h > 45) return true;
-                            }}
-                            return false;
-                        }});
+                        const predictions = await cocoModel.detect(video, 20, 0.10);
+                        const matched = predictions.filter(p => targetClasses.includes(p.class) && p.score >= 0.16);
                         phoneDetections = matched;
                         if (matched.length > 0) {{
                             phoneLastSeenTime = performance.now();
