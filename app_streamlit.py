@@ -815,7 +815,7 @@ elif st.session_state.current_page == "history":
     admin_col1, admin_col2 = st.columns([3, 1])
 
     with admin_col1:
-        pwd_input = st.text_input("Enter Admin Password", type="password", placeholder="Enter admin password (e.g. Aman-Rajbhar-2005)...", label_visibility="collapsed")
+        pwd_input = st.text_input("Enter Admin Password", type="password", placeholder="Enter secret admin passkey...", label_visibility="collapsed")
     with admin_col2:
         if st.button("🔓 Unlock Vault", use_container_width=True, type="primary"):
             if pwd_input == ADMIN_PASSWORD:
