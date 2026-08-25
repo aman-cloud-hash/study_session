@@ -104,6 +104,17 @@ st.set_page_config(
 st.markdown(
     """
     <style>
+    /* Hide Streamlit default header overlay that clips top content */
+    header[data-testid="stHeader"] {
+        display: none !important;
+    }
+    #MainMenu {
+        visibility: hidden;
+    }
+    footer {
+        visibility: hidden;
+    }
+
     /* Dark Theme Core */
     .stApp {
         background-color: #0A0B10;
@@ -111,42 +122,29 @@ st.markdown(
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     
-    /* Main Content Container Padding */
+    /* Main Content Container with safe top clearance */
     .block-container {
-        padding-top: 1.5rem !important;
-        padding-bottom: 2rem !important;
-        padding-left: 1rem !important;
-        padding-right: 1rem !important;
+        padding-top: 2.2rem !important;
+        padding-bottom: 2.5rem !important;
+        padding-left: clamp(0.8rem, 3vw, 1.8rem) !important;
+        padding-right: clamp(0.8rem, 3vw, 1.8rem) !important;
         max-width: 1280px;
     }
 
-    /* Top Navbar */
-    .nav-bar {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 12px 20px;
+    /* Top Navbar Glass Bar */
+    .nav-header-wrapper {
         background: #12141F;
         border: 1px solid #1F2338;
-        border-radius: 16px;
-        margin-bottom: 20px;
-    }
-    .nav-brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-    .nav-title {
-        font-size: clamp(14px, 3.5vw, 18px);
-        font-weight: 800;
-        color: #FFFFFF;
-        letter-spacing: -0.5px;
+        border-radius: 18px;
+        padding: 12px 20px;
+        margin-bottom: 24px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
     }
     
     /* Glowing Hero Badge */
     .hero-badge {
         display: inline-block;
-        padding: 4px 12px;
+        padding: 4px 14px;
         background: rgba(79, 70, 229, 0.15);
         border: 1px solid rgba(99, 102, 241, 0.4);
         border-radius: 20px;
@@ -253,9 +251,9 @@ st.markdown(
     /* 📱 MOBILE RESPONSIVE MEDIA QUERIES (<768px) */
     @media screen and (max-width: 768px) {
         .block-container {
-            padding-left: 0.5rem !important;
-            padding-right: 0.5rem !important;
-            padding-top: 0.8rem !important;
+            padding-left: 0.6rem !important;
+            padding-right: 0.6rem !important;
+            padding-top: 1.2rem !important;
         }
         h1 {
             font-size: 24px !important;
@@ -299,16 +297,16 @@ if "last_session_stats" not in st.session_state:
     st.session_state.last_session_stats = None
 
 # ─── Modern Top Navigation Bar (Mobile & Desktop Fluid) ──────────────────────
-nav_brand_col, nav_tabs_col = st.columns([1.3, 1.7], gap="medium")
+nav_brand_col, nav_tabs_col = st.columns([1.4, 1.6], gap="medium")
 
 with nav_brand_col:
     st.markdown(
         """
-        <div style="display: flex; align-items: center; gap: 10px; padding: 2px 0;">
-            <span style="font-size: 26px;">🎯</span>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 6px 0;">
+            <span style="font-size: 28px; line-height: 1;">🎯</span>
             <div>
-                <div style="font-size: clamp(14px, 3.5vw, 17px); font-weight: 800; color: #FFFFFF; line-height: 1.2;">AI STUDY FOCUS COPILOT</div>
-                <div style="font-size: clamp(10px, 2.5vw, 11px); color: #818CF8; font-weight: 700; letter-spacing: 0.5px;">NEXT-GEN VISION SENTINEL</div>
+                <div style="font-size: clamp(15px, 3.5vw, 18px); font-weight: 800; color: #FFFFFF; line-height: 1.2; letter-spacing: -0.3px;">AI STUDY FOCUS COPILOT</div>
+                <div style="font-size: clamp(10px, 2.5vw, 11px); color: #818CF8; font-weight: 700; letter-spacing: 0.8px; margin-top: 2px;">NEXT-GEN VISION SENTINEL</div>
             </div>
         </div>
         """,
@@ -329,7 +327,7 @@ with nav_tabs_col:
         st.session_state.current_page = nav_map[selected_nav]
         st.rerun()
 
-st.markdown("<hr style='border: 0; height: 1px; background: #1F2338; margin: 10px 0 20px 0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='border: 0; height: 1px; background: #1F2338; margin: 12px 0 24px 0;'>", unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
