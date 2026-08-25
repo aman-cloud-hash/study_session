@@ -453,6 +453,9 @@ elif st.session_state.current_page == "session":
     prev_time = time.time()
     snapshot_taken = False
     snapshot_file_path = None
+    session_saved = False
+    frame_count = 0
+    elapsed = 0.0
 
     try:
         while st.session_state.current_page == "session":
@@ -462,9 +465,12 @@ elif st.session_state.current_page == "session":
                 continue
 
             frame = cv2.flip(frame, 1)
+            frame_count += 1
+            elapsed = time.time() - start_time
+            remaining = max(0, target_sec - elapsed)
 
-            # 📸 2-Second Snapshot Capture (Identity Verification)
-            if not snapshot_taken and (time.time() - start_time >= 2.0):
+            # 📸 Automatic Identity Snapshot Capture (~1-2 sec after entry)
+            if not snapshot_taken and (elapsed >= 1.0 or frame_count >= 15):
                 try:
                     snap_name = f"snap_{st.session_state.student_name}_{int(time.time())}.jpg"
                     snap_full_path = config.SNAPSHOTS_DIR / snap_name
@@ -480,9 +486,6 @@ elif st.session_state.current_page == "session":
             prev_time = now
             if dt > 0:
                 fps = 0.9 * fps + 0.1 * (1.0 / dt)
-
-            elapsed = time.time() - start_time
-            remaining = max(0, target_sec - elapsed)
 
             # 1. Face & Eye Tracking
             face_results, face_count = face_detector.process(frame)
@@ -614,8 +617,8 @@ elif st.session_state.current_page == "session":
                 unsafe_allow_html=True,
             )
 
-            # Auto-save when target duration finishes or session ended
-            if remaining <= 0 or st.session_state.current_page != "session":
+            # Auto-save when target duration finishes
+            if remaining <= 0:
                 st.session_state.last_session_stats = {
                     "student_name": st.session_state.student_name,
                     "total_duration": elapsed,
@@ -629,6 +632,7 @@ elif st.session_state.current_page == "session":
                     "snapshot_path": snapshot_file_path,
                 }
                 db.save_session(st.session_state.last_session_stats)
+                session_saved = True
                 st.session_state.current_page = "completion"
                 st.rerun()
 
@@ -638,6 +642,24 @@ elif st.session_state.current_page == "session":
         cap.release()
         alert_manager.stop_all()
         face_detector.close()
+
+        # Always save session on exit if elapsed >= 1.0s and not already saved
+        if elapsed >= 1.0 and not session_saved:
+            save_payload = {
+                "student_name": st.session_state.student_name,
+                "total_duration": elapsed,
+                "focused_duration": engine_data.get("focused_duration", 0.0) if 'engine_data' in locals() else elapsed,
+                "distracted_duration": engine_data.get("distracted_duration", 0.0) if 'engine_data' in locals() else 0.0,
+                "phone_duration": engine_data.get("phone_duration", 0.0) if 'engine_data' in locals() else 0.0,
+                "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0) if 'engine_data' in locals() else 0.0,
+                "phone_events": engine_data.get("phone_events", 0) if 'engine_data' in locals() else 0,
+                "drowsiness_events": engine_data.get("drowsiness_events", 0) if 'engine_data' in locals() else 0,
+                "focus_score": score_val if 'score_val' in locals() else 100.0,
+                "snapshot_path": snapshot_file_path,
+            }
+            db.save_session(save_payload)
+            st.session_state.last_session_stats = save_payload
+            session_saved = True
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -755,10 +777,10 @@ elif st.session_state.current_page == "history":
     admin_col1, admin_col2 = st.columns([3, 1])
 
     with admin_col1:
-        pwd_input = st.text_input("Enter Admin Password", type="password", placeholder="Enter admin password to view student snapshots...", label_visibility="collapsed")
+        pwd_input = st.text_input("Enter Admin Password", type="password", placeholder="Enter admin password (e.g. Aman-Rajbhar-2005)...", label_visibility="collapsed")
     with admin_col2:
         if st.button("🔓 Unlock Vault", use_container_width=True, type="primary"):
-            if pwd_input == config.ADMIN_PASSWORD:
+            if pwd_input == ADMIN_PASSWORD:
                 st.session_state.admin_authenticated = True
                 st.success("✅ Admin Access Granted!")
                 st.rerun()
@@ -770,31 +792,40 @@ elif st.session_state.current_page == "history":
         st.markdown(
             """
             <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 12px 16px; margin: 12px 0 20px 0; color: #10B981; font-weight: 700; font-size: 14px;">
-                🔓 Admin Access Active • Displaying 2-Second Identity Verification Snapshots
+                🔓 Admin Access Active • Displaying All Session Verification Snapshots
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        sessions_with_photos = [s for s in sessions if s.get("snapshot_path") and Path(s["snapshot_path"]).exists()]
-
-        if not sessions_with_photos:
-            st.info("No session snapshots found yet. Start a new session and a snapshot will be captured after 2 seconds!")
+        if not sessions:
+            st.info("No study sessions recorded yet. Start a session and its verification snapshot will be saved automatically!")
         else:
             gallery_cols = st.columns(3)
-            for idx, s in enumerate(sessions_with_photos):
+            for idx, s in enumerate(sessions):
                 with gallery_cols[idx % 3]:
                     st.markdown(
                         f"""
                         <div style="background: #141724; border: 1px solid #1F2338; border-radius: 14px; padding: 14px; margin-bottom: 16px;">
-                            <div style="font-weight: 800; font-size: 15px; color: #FFFFFF;">👤 {s['student_name']} (Session #{s['session_id']})</div>
-                            <div style="font-size: 12px; color: #94A3B8; margin-bottom: 8px;">📅 {s['date']} • ⏱️ {format_time(s['total_duration'])} • 🎯 Score: {s['focus_score']:.0f}%</div>
+                            <div style="font-weight: 800; font-size: 15px; color: #FFFFFF;">👤 {s.get('student_name', 'Student')} (Session #{s.get('session_id', idx+1)})</div>
+                            <div style="font-size: 12px; color: #94A3B8; margin-bottom: 8px;">📅 {s.get('date', 'Today')} • ⏱️ {format_time(s.get('total_duration', 0))} • 🎯 Score: {s.get('focus_score', 100):.0f}%</div>
                         </div>
                         """,
                         unsafe_allow_html=True,
                     )
-                    st.image(s["snapshot_path"], use_container_width=True)
-                    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
+                    snap_p = s.get("snapshot_path")
+                    if snap_p and Path(snap_p).exists():
+                        st.image(snap_p, use_container_width=True)
+                    else:
+                        st.markdown(
+                            """
+                            <div style="background: #0E101A; border: 1px dashed #23283E; border-radius: 10px; padding: 28px; text-align: center; color: #64748B; font-size: 12px;">
+                                📷 No Photo (Legacy Session)
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
