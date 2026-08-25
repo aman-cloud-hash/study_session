@@ -696,9 +696,26 @@ elif st.session_state.current_page == "session":
     phone_b64 = audio_tracks.get("phone", "")
 
     # 🎥 ULTRA-CLEAN 60 FPS INSTANT VISION ENGINE (OmeTV Live Style with Direct Browser Sound)
-    st.markdown(
+    import streamlit.components.v1 as components
+
+    components.html(
         f"""
-        <div style="background: #0B0E17; border: 1px solid #1E293B; border-radius: 18px; padding: 18px; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <meta charset="utf-8">
+            <style>
+                body {{
+                    margin: 0;
+                    padding: 0;
+                    background: transparent;
+                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+                    color: #FFFFFF;
+                }}
+            </style>
+        </head>
+        <body>
+        <div style="background: #0B0E17; border: 1px solid #1E293B; border-radius: 18px; padding: 18px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
             <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 20px;">
                 <!-- Left: 60 FPS Crystal Clear Video Canvas -->
                 <div style="position: relative; width: 100%; border-radius: 14px; overflow: hidden; background: #020617; border: 1px solid rgba(99, 102, 241, 0.3); aspect-ratio: 4/3; display: flex; align-items: center; justify-content: center;">
@@ -714,6 +731,16 @@ elif st.session_state.current_page == "session":
                     <!-- FPS Badge -->
                     <div style="position: absolute; top: 14px; right: 14px; background: rgba(12, 14, 22, 0.85); backdrop-filter: blur(8px); border: 1px solid rgba(255,255,255,0.1); border-radius: 20px; padding: 6px 12px; font-size: 11px; font-weight: 700; color: #10B981;">
                         ⚡ <span id="fpsCount">60</span> FPS • 0ms LAG
+                    </div>
+
+                    <!-- Permission & Camera Launch Overlay -->
+                    <div id="camStartOverlay" style="position: absolute; inset: 0; background: rgba(10, 14, 26, 0.92); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; padding: 20px; text-align: center;">
+                        <span style="font-size: 40px; margin-bottom: 12px;">📷</span>
+                        <div style="font-weight: 800; font-size: 16px; margin-bottom: 6px;">READY FOR ULTRA-HD SENTRY</div>
+                        <div style="font-size: 12px; color: #94A3B8; margin-bottom: 16px;">Click below to grant camera access & unlock instant meme audio</div>
+                        <button id="btnStartStream" style="background: linear-gradient(135deg, #6366F1, #4F46E5); color: #FFFFFF; border: 0; padding: 12px 24px; font-weight: 800; font-size: 14px; border-radius: 12px; cursor: pointer; box-shadow: 0 4px 15px rgba(99,102,241,0.4);">
+                            ▶️ START 60 FPS CAMERA
+                        </button>
                     </div>
 
                     <!-- Instant Eye Closed Warning Bar -->
@@ -756,40 +783,56 @@ elif st.session_state.current_page == "session":
             <!-- Embedded Audio Tracks -->
             <audio id="audioDrowsy" src="{drowsy_b64}" preload="auto"></audio>
             <audio id="audioPhone" src="{phone_b64}" preload="auto"></audio>
+        </div>
 
-            <script>
-            (() => {{
-                const video = document.getElementById('liveCam');
-                const canvas = document.getElementById('liveHUD');
-                const ctx = canvas ? canvas.getContext('2d') : null;
-                const statusDot = document.getElementById('statusDot');
-                const statusText = document.getElementById('statusText');
-                const eyeWarning = document.getElementById('eyeClosedWarning');
-                const fpsBadge = document.getElementById('fpsCount');
-                const audioDrowsy = document.getElementById('audioDrowsy');
-                const audioPhone = document.getElementById('audioPhone');
+        <script>
+        (() => {{
+            const video = document.getElementById('liveCam');
+            const canvas = document.getElementById('liveHUD');
+            const ctx = canvas ? canvas.getContext('2d') : null;
+            const startOverlay = document.getElementById('camStartOverlay');
+            const btnStart = document.getElementById('btnStartStream');
+            const eyeWarning = document.getElementById('eyeClosedWarning');
+            const fpsBadge = document.getElementById('fpsCount');
+            const clockVal = document.getElementById('clockVal');
+            const audioDrowsy = document.getElementById('audioDrowsy');
+            const audioPhone = document.getElementById('audioPhone');
 
-                // Unlock audio playback on first interaction
-                document.addEventListener('click', () => {{
-                    if (audioDrowsy) audioDrowsy.load();
-                    if (audioPhone) audioPhone.load();
-                }}, {{ once: true }});
+            let sessionSeconds = {st.session_state.duration_min} * 60;
+            let elapsed = 0;
 
-                document.getElementById('btnTestDrowsy')?.addEventListener('click', () => {{
-                    if (audioDrowsy) {{
-                        audioDrowsy.currentTime = 0;
-                        audioDrowsy.play().catch(e => console.log(e));
-                    }}
-                }});
+            function formatTime(sec) {{
+                const m = Math.floor(sec / 60).toString().padStart(2, '0');
+                const s = Math.floor(sec % 60).toString().padStart(2, '0');
+                return `${{m}}:${{s}}`;
+            }}
 
-                document.getElementById('btnTestPhone')?.addEventListener('click', () => {{
-                    if (audioPhone) {{
-                        audioPhone.currentTime = 1.0;
-                        audioPhone.play().catch(e => console.log(e));
-                    }}
-                }});
+            setInterval(() => {{
+                if (elapsed < sessionSeconds) {{
+                    elapsed++;
+                    if (clockVal) clockVal.innerText = formatTime(sessionSeconds - elapsed);
+                }}
+            }}, 1000);
 
-                // Start 60 FPS Camera Stream
+            // Test Buttons
+            document.getElementById('btnTestDrowsy')?.addEventListener('click', () => {{
+                if (audioDrowsy) {{
+                    audioDrowsy.currentTime = 0;
+                    audioDrowsy.play().catch(e => console.log(e));
+                }}
+            }});
+
+            document.getElementById('btnTestPhone')?.addEventListener('click', () => {{
+                if (audioPhone) {{
+                    audioPhone.currentTime = 1.0;
+                    audioPhone.play().catch(e => console.log(e));
+                }}
+            }});
+
+            function startCamera() {{
+                if (audioDrowsy) audioDrowsy.load();
+                if (audioPhone) audioPhone.load();
+
                 navigator.mediaDevices.getUserMedia({{
                     video: {{ width: {{ ideal: 1280 }}, height: {{ ideal: 720 }}, frameRate: {{ ideal: 60 }} }},
                     audio: false
@@ -798,55 +841,66 @@ elif st.session_state.current_page == "session":
                         video.srcObject = stream;
                         video.play();
                     }}
+                    if (startOverlay) startOverlay.style.display = 'none';
                 }}).catch(err => {{
                     console.error("Camera access error:", err);
+                    alert("Camera access denied. Please click 'Allow' in your browser permissions bar.");
                 }});
+            }}
 
-                // 60 FPS Telemetry & HUD Renderer
-                let frameCount = 0;
-                let lastTime = performance.now();
-                let fps = 60;
-                let eyesClosedDuration = 0;
-                let isDrowsy = false;
+            btnStart?.addEventListener('click', startCamera);
 
-                function renderLoop() {{
-                    const now = performance.now();
-                    const dt = (now - lastTime) / 1000;
-                    lastTime = now;
-                    if (dt > 0) fps = Math.round(0.9 * fps + 0.1 * (1 / dt));
-                    if (fpsBadge) fpsBadge.innerText = fps;
+            // Auto-start camera if permissions are already granted
+            navigator.permissions?.query({{ name: 'camera' }}).then(res => {{
+                if (res.state === 'granted') {{
+                    startCamera();
+                }}
+            }}).catch(() => {{}});
 
-                    if (canvas && video && video.videoWidth) {{
-                        canvas.width = video.videoWidth;
-                        canvas.height = video.videoHeight;
-                        if (ctx) {{
-                            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            // 60 FPS Telemetry & HUD Loop
+            let lastTime = performance.now();
+            let fps = 60;
 
-                            // Cyberpunk Corner Reticles
-                            const w = canvas.width;
-                            const h = canvas.height;
-                            const rLen = 30;
-                            ctx.strokeStyle = isDrowsy ? '#EF4444' : '#10B981';
-                            ctx.lineWidth = 3;
+            function renderLoop() {{
+                const now = performance.now();
+                const dt = (now - lastTime) / 1000;
+                lastTime = now;
+                if (dt > 0) fps = Math.round(0.9 * fps + 0.1 * (1 / dt));
+                if (fpsBadge) fpsBadge.innerText = fps;
 
-                            // Top-Left
-                            ctx.beginPath(); ctx.moveTo(20, 20 + rLen); ctx.lineTo(20, 20); ctx.lineTo(20 + rLen, 20); ctx.stroke();
-                            // Top-Right
-                            ctx.beginPath(); ctx.moveTo(w - 20 - rLen, 20); ctx.lineTo(w - 20, 20); ctx.lineTo(w - 20, 20 + rLen); ctx.stroke();
-                            // Bottom-Left
-                            ctx.beginPath(); ctx.moveTo(20, h - 20 - rLen); ctx.lineTo(20, h - 20); ctx.lineTo(20 + rLen, h - 20); ctx.stroke();
-                            // Bottom-Right
-                            ctx.beginPath(); ctx.moveTo(w - 20 - rLen, h - 20); ctx.lineTo(w - 20, h - 20); ctx.lineTo(w - 20, h - 20 - rLen); ctx.stroke();
-                        }}
+                if (canvas && video && video.videoWidth) {{
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    if (ctx) {{
+                        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                        // Cyberpunk Corner Reticles
+                        const w = canvas.width;
+                        const h = canvas.height;
+                        const rLen = 35;
+                        ctx.strokeStyle = '#10B981';
+                        ctx.lineWidth = 3;
+
+                        // Top-Left
+                        ctx.beginPath(); ctx.moveTo(20, 20 + rLen); ctx.lineTo(20, 20); ctx.lineTo(20 + rLen, 20); ctx.stroke();
+                        // Top-Right
+                        ctx.beginPath(); ctx.moveTo(w - 20 - rLen, 20); ctx.lineTo(w - 20, 20); ctx.lineTo(w - 20, 20 + rLen); ctx.stroke();
+                        // Bottom-Left
+                        ctx.beginPath(); ctx.moveTo(20, h - 20 - rLen); ctx.lineTo(20, h - 20); ctx.lineTo(20 + rLen, h - 20); ctx.stroke();
+                        // Bottom-Right
+                        ctx.beginPath(); ctx.moveTo(w - 20 - rLen, h - 20); ctx.lineTo(w - 20, h - 20); ctx.lineTo(w - 20, h - 20 - rLen); ctx.stroke();
                     }}
-                    requestAnimationFrame(renderLoop);
                 }}
                 requestAnimationFrame(renderLoop);
-            }})();
-            </script>
-        </div>
+            }}
+            requestAnimationFrame(renderLoop);
+        }})();
+        </script>
+        </body>
+        </html>
         """,
-        unsafe_allow_html=True,
+        height=580,
+        scrolling=False,
     )
 
 
