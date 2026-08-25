@@ -240,7 +240,13 @@ st.markdown(
 
 ensure_directories()
 
-# ─── Initialize State Router ────────────────────────────────────────────────
+# ─── Initialize State Router & Camera Detection ──────────────────────────────
+if "detected_cameras" not in st.session_state:
+    try:
+        st.session_state.detected_cameras = detect_available_cameras(max_tested=4)
+    except Exception:
+        st.session_state.detected_cameras = [{"index": 0, "name": "Camera 0 [Default]"}]
+
 if "current_page" not in st.session_state:
     st.session_state.current_page = "home"  # 'home', 'session', 'completion', 'history', 'settings'
 if "student_name" not in st.session_state:
@@ -336,21 +342,31 @@ if st.session_state.current_page == "home":
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-        # Camera Selector
+        # Camera Selector with Auto-Detection & Scan
         st.markdown('<div class="section-label">ACTIVE CAMERA DEVICE</div>', unsafe_allow_html=True)
-        cam_col1, cam_col2 = st.columns([3, 1])
+        cam_col1, cam_col2 = st.columns([3.2, 1])
+
+        cam_names = [c["name"] for c in st.session_state.detected_cameras]
+        # Find current index
+        current_cam_name = next((c["name"] for c in st.session_state.detected_cameras if c["index"] == st.session_state.cam_index), cam_names[0])
+
         with cam_col1:
-            cam_idx = st.number_input("Camera Index", min_value=0, max_value=5, value=st.session_state.cam_index, label_visibility="collapsed")
-            st.session_state.cam_index = int(cam_idx)
-        with cam_col2:
-            st.markdown(
-                """
-                <div style="background: #181B2B; border: 1px solid #282E47; border-radius: 10px; padding: 9px; text-align: center; font-size: 12px; font-weight: 700; color: #10B981;">
-                    ● Online
-                </div>
-                """,
-                unsafe_allow_html=True,
+            selected_cam_name = st.selectbox(
+                "Active Camera Device",
+                options=cam_names,
+                index=cam_names.index(current_cam_name),
+                label_visibility="collapsed",
             )
+            # Update selected index
+            for c in st.session_state.detected_cameras:
+                if c["name"] == selected_cam_name:
+                    st.session_state.cam_index = c["index"]
+                    break
+
+        with cam_col2:
+            if st.button("🔄 Scan", use_container_width=True):
+                st.session_state.detected_cameras = detect_available_cameras(max_tested=4)
+                st.rerun()
 
         st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
 
@@ -745,6 +761,29 @@ elif st.session_state.current_page == "settings":
     )
     c_phone = st.slider("YOLO Phone Detection Confidence", min_value=0.20, max_value=0.80, value=float(config.PHONE_DETECTION_CONFIDENCE), step=0.05)
     config.PHONE_DETECTION_CONFIDENCE = c_phone
+
+    st.markdown(
+        """
+        <div class="card-surface">
+            <div class="card-title">📹 Camera Hardware Device</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    cam_names = [c["name"] for c in st.session_state.detected_cameras]
+    cur_cam = next((c["name"] for c in st.session_state.detected_cameras if c["index"] == st.session_state.cam_index), cam_names[0])
+    s_cam_col1, s_cam_col2 = st.columns([3.2, 1])
+    with s_cam_col1:
+        chosen_cam = st.selectbox("Settings Active Camera", options=cam_names, index=cam_names.index(cur_cam), label_visibility="collapsed")
+        for c in st.session_state.detected_cameras:
+            if c["name"] == chosen_cam:
+                st.session_state.cam_index = c["index"]
+                config.DEFAULT_CAMERA_INDEX = c["index"]
+                break
+    with s_cam_col2:
+        if st.button("🔄 Scan Devices", key="scan_settings_cam", use_container_width=True):
+            st.session_state.detected_cameras = detect_available_cameras(max_tested=4)
+            st.rerun()
 
     st.markdown(
         """
