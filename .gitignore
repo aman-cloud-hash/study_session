@@ -1,0 +1,44 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environment
+venv/
+.venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.spec
+
+# Database files (local, regenerated per user)
+database/*.db
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Model weights (large files — download separately)
+models/*.pt
+models/*.onnx
+
+# Reports generated at runtime
+reports/*.png
+reports/*.pdf
+reports/*.html
+
+# Logs
+*.log
+
+# Environment variables
+.env

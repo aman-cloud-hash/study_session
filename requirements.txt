@@ -1,0 +1,30 @@
+# AI Study Focus & Distraction Detector
+# Core Dependencies
+
+# Computer Vision
+opencv-python>=4.8.0
+mediapipe>=0.10.9
+
+# Object Detection (YOLO)
+ultralytics>=8.1.0
+
+# Data & ML
+numpy>=1.24.0
+pandas>=1.5.0
+scikit-learn>=1.3.0
+
+# GUI
+customtkinter>=5.2.0
+Pillow>=10.0.0
+
+# Audio Alerts (Community Edition — supports Python 3.12+)
+pygame-ce>=2.4.0
+
+# Visualization
+matplotlib>=3.7.0
+
+# Database (built-in, listed for documentation)
+# sqlite3 — included in Python standard library
+
+# Packaging (optional)
+# pyinstaller>=6.0.0
