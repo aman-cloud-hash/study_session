@@ -42,10 +42,10 @@ CAMERA_FPS = 30
 EAR_THRESHOLD = 0.22
 
 # Continuous duration (seconds) eyes must remain closed before Drowsiness Alert
-EYE_CLOSED_DURATION_THRESHOLD = 3.0  # seconds
+EYE_CLOSED_DURATION_THRESHOLD = 1.2  # Fast 1.2s response
 
 # Debounce: Seconds of continuous OPEN eyes required to reset closed timer (ignores 1-frame noise)
-EYE_OPEN_DEBOUNCE_SEC = 0.25  # seconds
+EYE_OPEN_DEBOUNCE_SEC = 0.15  # Fast 0.15s recovery
 
 FACE_DETECTION_CONFIDENCE = 0.5
 FACE_TRACKING_CONFIDENCE = 0.5
