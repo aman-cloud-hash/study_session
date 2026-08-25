@@ -77,6 +77,12 @@ def _setup_torch_compatibility() -> None:
 _setup_torch_compatibility()
 
 import config
+import importlib
+importlib.reload(config)
+
+SNAPSHOTS_DIR = getattr(config, "SNAPSHOTS_DIR", PROJECT_ROOT / "database" / "snapshots")
+ADMIN_PASSWORD = getattr(config, "ADMIN_PASSWORD", "Aman-Rajbhar-2005")
+
 from src.detection.face_detector import FaceMeshDetector
 from src.detection.eye_detector import EyeDetector
 from src.detection.phone_detector import PhoneDetector
