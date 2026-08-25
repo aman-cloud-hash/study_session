@@ -728,13 +728,16 @@ elif st.session_state.current_page == "session":
             <!-- Top Controls: Active Camera Switcher -->
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; background: rgba(15, 23, 42, 0.6); padding: 8px 14px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06);">
                 <div style="display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 700; color: #94A3B8;">
-                    <span>📷 ACTIVE CAMERA:</span>
-                    <select id="cameraSwitcher" style="background: #1E293B; color: #F8FAFC; border: 1px solid #334155; border-radius: 8px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; outline: none;">
-                        <option value="">Detecting available cameras...</option>
+                    <span>📷 CAMERA:</span>
+                    <select id="cameraSwitcher" style="background: #1E293B; color: #F8FAFC; border: 1px solid #334155; border-radius: 8px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer; outline: none; max-width: 220px;">
+                        <option value="">Select Camera...</option>
                     </select>
+                    <button id="btnFlipCam" title="Switch to Next Camera" style="background: rgba(99, 102, 241, 0.2); border: 1px solid #6366F1; color: #FFFFFF; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 5px 10px; cursor: pointer;">
+                        🔄 Flip
+                    </button>
                 </div>
                 <div style="font-size: 11px; font-weight: 700; color: #10B981;">
-                    ⚡ <span id="fpsCount">60</span> FPS • <span id="aiModelStatus" style="color: #818CF8;">AI LOADING...</span>
+                    ⚡ <span id="fpsCount">60</span> FPS • <span id="aiModelStatus" style="color: #818CF8;">AI ACTIVE</span>
                 </div>
             </div>
 
@@ -938,17 +941,24 @@ elif st.session_state.current_page == "session":
                 }}
             }}, 100);
 
-            // 4. Enumerate Cameras & Populate Switcher
-            async function updateCameraList() {{
+            // 4. Enumerate Cameras & Live Switching Engine
+            let availableCameras = [];
+            let activeDeviceId = null;
+            let mpCamera = null;
+
+            async function updateCameraList(currentId = null) {{
                 try {{
                     const devices = await navigator.mediaDevices.enumerateDevices();
-                    const videoDevices = devices.filter(d => d.kind === 'videoinput');
-                    if (cameraSwitcher && videoDevices.length > 0) {{
+                    availableCameras = devices.filter(d => d.kind === 'videoinput');
+                    if (cameraSwitcher && availableCameras.length > 0) {{
                         cameraSwitcher.innerHTML = '';
-                        videoDevices.forEach((dev, idx) => {{
+                        availableCameras.forEach((dev, idx) => {{
                             const opt = document.createElement('option');
                             opt.value = dev.deviceId;
                             opt.text = dev.label || `Camera ${{idx + 1}}`;
+                            if (dev.deviceId === currentId || (!currentId && idx === 0)) {{
+                                opt.selected = true;
+                            }}
                             cameraSwitcher.appendChild(opt);
                         }});
                     }}
@@ -957,53 +967,85 @@ elif st.session_state.current_page == "session":
                 }}
             }}
 
-            cameraSwitcher?.addEventListener('change', () => {{
-                const chosenId = cameraSwitcher.value;
+            document.getElementById('btnFlipCam')?.addEventListener('click', () => {{
+                if (availableCameras.length > 1) {{
+                    let curIdx = availableCameras.findIndex(c => c.deviceId === activeDeviceId);
+                    let nextIdx = (curIdx + 1) % availableCameras.length;
+                    const nextCam = availableCameras[nextIdx];
+                    if (nextCam) {{
+                        if (cameraSwitcher) cameraSwitcher.value = nextCam.deviceId;
+                        startCamera(nextCam.deviceId);
+                    }}
+                }} else {{
+                    startCamera();
+                }}
+            }});
+
+            cameraSwitcher?.addEventListener('change', (e) => {{
+                const chosenId = e.target.value;
                 if (chosenId) {{
                     startCamera(chosenId);
                 }}
             }});
 
             // 5. Start Camera Stream
-            function startCamera(deviceId = null) {{
+            async function startCamera(deviceId = null) {{
                 if (audioDrowsy) audioDrowsy.load();
                 if (audioPhone) audioPhone.load();
 
                 if (currentStream) {{
                     currentStream.getTracks().forEach(t => t.stop());
+                    currentStream = null;
+                }}
+                if (mpCamera) {{
+                    try {{ mpCamera.stop(); }} catch(e){{}}
+                    mpCamera = null;
                 }}
 
                 const constraints = {{
-                    video: deviceId ? {{ deviceId: {{ exact: deviceId }}, width: {{ ideal: 1280 }}, height: {{ ideal: 720 }} }} 
-                                    : {{ width: {{ ideal: 1280 }}, height: {{ ideal: 720 }}, frameRate: {{ ideal: 60 }} }},
+                    video: deviceId ? {{ deviceId: {{ exact: deviceId }} }} : {{ facingMode: 'user', width: {{ ideal: 1280 }}, height: {{ ideal: 720 }} }},
                     audio: false
                 }};
 
-                navigator.mediaDevices.getUserMedia(constraints).then(stream => {{
+                try {{
+                    const stream = await navigator.mediaDevices.getUserMedia(constraints);
                     currentStream = stream;
+                    activeDeviceId = deviceId || (stream.getVideoTracks()[0]?.getSettings()?.deviceId);
+
                     if (video) {{
                         video.srcObject = stream;
-                        video.play();
+                        await video.play();
                     }}
                     if (startOverlay) startOverlay.style.display = 'none';
 
-                    updateCameraList();
+                    await updateCameraList(activeDeviceId);
 
                     // Connect video to MediaPipe Camera Utils
                     if (window.Camera && faceMesh) {{
-                        const camera = new Camera(video, {{
+                        mpCamera = new Camera(video, {{
                             onFrame: async () => {{
                                 await faceMesh.send({{ image: video }});
                             }},
                             width: 640,
                             height: 480
                         }});
-                        camera.start();
+                        mpCamera.start();
                     }}
-                }}).catch(err => {{
-                    console.error("Camera access error:", err);
-                    alert("Camera access denied. Please click 'Allow' in your browser permissions bar.");
-                }});
+                }} catch (err) {{
+                    console.error("Camera start error:", err);
+                    if (deviceId) {{
+                        try {{
+                            const fallbackStream = await navigator.mediaDevices.getUserMedia({{ video: true, audio: false }});
+                            currentStream = fallbackStream;
+                            if (video) {{ video.srcObject = fallbackStream; video.play(); }}
+                            if (startOverlay) startOverlay.style.display = 'none';
+                        }} catch(e2) {{
+                            alert("Failed to switch camera: " + err.message);
+                        }}
+                    }} else {{
+                        alert("Camera access denied. Please click 'Allow' in your browser permissions bar.");
+                    }}
+                }}
             }}
 
             btnStart?.addEventListener('click', () => startCamera());
