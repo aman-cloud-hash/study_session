@@ -394,7 +394,6 @@ with tab_live:
                     face_count=face_count,
                     eye_status=eye_data.get("eye_status", "UNKNOWN"),
                     phone_detected=phone_data.get("phone_detected", False),
-                    current_fps=fps,
                 )
 
                 # 4. Synchronize Instant Audio State
