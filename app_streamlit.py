@@ -933,17 +933,19 @@ elif st.session_state.current_page == "session":
 
             let phoneLastSeenTime = 0;
 
-            // 3. Periodic Phone Radar Scan (Strictly CELL PHONE ONLY, score >= 0.38, w >= 60, h >= 80)
+            // 3. Periodic Phone Radar Scan (Strictly CELL PHONE ONLY - Supports flat, tilted, angled & side profiles)
             setInterval(async () => {{
                 if (cocoModel && video && video.readyState >= 2) {{
                     try {{
-                        const predictions = await cocoModel.detect(video, 10, 0.20);
+                        const predictions = await cocoModel.detect(video, 20, 0.12);
                         const matched = predictions.filter(p => {{
                             if (p.class !== 'cell phone') return false;
-                            if (p.score < 0.38) return false;
+                            if (p.score < 0.18) return false;
                             const [x, y, w, h] = p.bbox;
-                            // Exclude tiny objects like fingers (phones are at least 60x80 px)
-                            return (w >= 60 && h >= 80);
+                            // Supports angled, side-view and tilted phones
+                            const maxDim = Math.max(w, h);
+                            const minDim = Math.min(w, h);
+                            return (maxDim >= 50 && minDim >= 18);
                         }});
                         phoneDetections = matched;
                         if (matched.length > 0) {{
@@ -951,7 +953,7 @@ elif st.session_state.current_page == "session":
                         }}
                     }} catch (e) {{}}
                 }}
-            }}, 80);
+            }}, 70);
 
             // 4. Periodic FaceMesh Processing (Direct stream, zero hijacking)
             let isProcessingFace = false;
