@@ -299,16 +299,16 @@ if "last_session_stats" not in st.session_state:
     st.session_state.last_session_stats = None
 
 # ─── Modern Top Navigation Bar (Mobile & Desktop Fluid) ──────────────────────
-nav_brand_col, nav_tabs_col = st.columns([1.6, 2.0], gap="medium")
+nav_brand_col, nav_tabs_col = st.columns([1.3, 1.7], gap="medium")
 
 with nav_brand_col:
     st.markdown(
         """
-        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 0;">
-            <span style="font-size: 24px;">🎯</span>
+        <div style="display: flex; align-items: center; gap: 10px; padding: 2px 0;">
+            <span style="font-size: 26px;">🎯</span>
             <div>
-                <div style="font-size: clamp(15px, 3.5vw, 17px); font-weight: 800; color: #FFFFFF;">AI STUDY FOCUS COPILOT</div>
-                <div style="font-size: clamp(10px, 2.5vw, 11px); color: #818CF8; font-weight: 700;">NEXT-GEN VISION SENTINEL</div>
+                <div style="font-size: clamp(14px, 3.5vw, 17px); font-weight: 800; color: #FFFFFF; line-height: 1.2;">AI STUDY FOCUS COPILOT</div>
+                <div style="font-size: clamp(10px, 2.5vw, 11px); color: #818CF8; font-weight: 700; letter-spacing: 0.5px;">NEXT-GEN VISION SENTINEL</div>
             </div>
         </div>
         """,
@@ -316,21 +316,20 @@ with nav_brand_col:
     )
 
 with nav_tabs_col:
-    tcol1, tcol2, tcol3 = st.columns(3)
-    with tcol1:
-        if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
-            st.session_state.current_page = "home"
-            st.rerun()
-    with tcol2:
-        if st.button("📊 History", use_container_width=True, type="primary" if st.session_state.current_page == "history" else "secondary"):
-            st.session_state.current_page = "history"
-            st.rerun()
-    with tcol3:
-        if st.button("⚙️ Settings", use_container_width=True, type="primary" if st.session_state.current_page == "settings" else "secondary"):
-            st.session_state.current_page = "settings"
-            st.rerun()
+    nav_map = {"🏠 Home": "home", "📊 History": "history", "⚙️ Settings": "settings"}
+    current_label = next((k for k, v in nav_map.items() if v == st.session_state.current_page), "🏠 Home")
+    
+    selected_nav = st.segmented_control(
+        "Navigation Tabs",
+        options=list(nav_map.keys()),
+        default=current_label,
+        label_visibility="collapsed"
+    )
+    if selected_nav and nav_map.get(selected_nav) != st.session_state.current_page:
+        st.session_state.current_page = nav_map[selected_nav]
+        st.rerun()
 
-st.markdown("<hr style='border: 0; height: 1px; background: #1F2338; margin: 8px 0 20px 0;'>", unsafe_allow_html=True)
+st.markdown("<hr style='border: 0; height: 1px; background: #1F2338; margin: 10px 0 20px 0;'>", unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════
@@ -341,8 +340,8 @@ if st.session_state.current_page == "home":
         """
         <div style="text-align: center; margin-bottom: 24px;">
             <div class="hero-badge">✨ NEXT-GEN AI STUDY COPILOT</div>
-            <h1 style="font-size: 36px; font-weight: 900; margin: 4px 0; color: #FFFFFF;">AI STUDY FOCUS SENTINEL</h1>
-            <p style="color: #94A3B8; font-size: 14px; margin: 0 auto; max-width: 600px;">
+            <h1 style="font-size: clamp(24px, 5vw, 36px); font-weight: 900; margin: 6px 0; color: #FFFFFF;">AI STUDY FOCUS SENTINEL</h1>
+            <p style="color: #94A3B8; font-size: clamp(12px, 3vw, 14px); margin: 0 auto; max-width: 600px; line-height: 1.5;">
                 Real-time Computer Vision sentry for laser-sharp study focus, instant phone distraction alerts, and drowsiness prevention.
             </p>
         </div>
@@ -355,7 +354,7 @@ if st.session_state.current_page == "home":
     with col_setup:
         st.markdown(
             """
-            <div class="card-surface">
+            <div class="card-surface" style="padding-bottom: 12px;">
                 <div class="card-title">👤 Student & Session Setup</div>
             </div>
             """,
@@ -369,16 +368,24 @@ if st.session_state.current_page == "home":
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
-        # Preset Duration Pills
+        # Preset Duration Horizontal Segmented Control
         st.markdown('<div class="section-label">SELECT TARGET DURATION</div>', unsafe_allow_html=True)
-        pill_cols = st.columns(5)
-        presets = [25, 45, 60, 90, 120]
-        for i, dur in enumerate(presets):
-            with pill_cols[i]:
-                is_sel = (st.session_state.duration_min == dur)
-                if st.button(f"{dur}m", key=f"pill_{dur}", use_container_width=True, type="primary" if is_sel else "secondary"):
-                    st.session_state.duration_min = dur
-                    st.rerun()
+        dur_presets = ["15m", "25m", "45m", "60m", "90m", "120m"]
+        cur_dur_str = f"{st.session_state.duration_min}m"
+        if cur_dur_str not in dur_presets:
+            dur_presets.append(cur_dur_str)
+
+        selected_dur = st.segmented_control(
+            "Target Duration",
+            options=dur_presets,
+            default=cur_dur_str,
+            label_visibility="collapsed"
+        )
+        if selected_dur:
+            try:
+                st.session_state.duration_min = int(selected_dur.replace("m", ""))
+            except ValueError:
+                st.session_state.duration_min = 25
 
         st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
 
