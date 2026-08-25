@@ -12,6 +12,7 @@ def ensure_directories() -> None:
         config.AUDIO_DIR,
         config.MODELS_DIR,
         config.DATABASE_DIR,
+        config.SNAPSHOTS_DIR,
         config.REPORTS_DIR,
     ]
     for directory in directories:

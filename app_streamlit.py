@@ -445,6 +445,8 @@ elif st.session_state.current_page == "session":
     target_sec = st.session_state.duration_min * 60
     fps = 30.0
     prev_time = time.time()
+    snapshot_taken = False
+    snapshot_file_path = None
 
     try:
         while st.session_state.current_page == "session":
@@ -454,6 +456,17 @@ elif st.session_state.current_page == "session":
                 continue
 
             frame = cv2.flip(frame, 1)
+
+            # 📸 2-Second Snapshot Capture (Identity Verification)
+            if not snapshot_taken and (time.time() - start_time >= 2.0):
+                try:
+                    snap_name = f"snap_{st.session_state.student_name}_{int(time.time())}.jpg"
+                    snap_full_path = config.SNAPSHOTS_DIR / snap_name
+                    cv2.imwrite(str(snap_full_path), frame)
+                    snapshot_file_path = str(snap_full_path)
+                    snapshot_taken = True
+                except Exception as e:
+                    print(f"[Snapshot Error] {e}")
 
             # Compute FPS
             now = time.time()
@@ -595,8 +608,8 @@ elif st.session_state.current_page == "session":
                 unsafe_allow_html=True,
             )
 
-            # Auto-save when target duration finishes
-            if remaining <= 0:
+            # Auto-save when target duration finishes or session ended
+            if remaining <= 0 or st.session_state.current_page != "session":
                 st.session_state.last_session_stats = {
                     "student_name": st.session_state.student_name,
                     "total_duration": elapsed,
@@ -607,6 +620,7 @@ elif st.session_state.current_page == "session":
                     "phone_events": engine_data.get("phone_events", 0),
                     "drowsiness_events": engine_data.get("drowsiness_events", 0),
                     "focus_score": score_val,
+                    "snapshot_path": snapshot_file_path,
                 }
                 db.save_session(st.session_state.last_session_stats)
                 st.session_state.current_page = "completion"
@@ -629,7 +643,7 @@ elif st.session_state.current_page == "completion":
         <div style="text-align: center; margin-bottom: 24px;">
             <div class="hero-badge" style="color: #10B981; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.15);">🎉 SESSION COMPLETE!</div>
             <h1 style="font-size: 34px; font-weight: 900; color: #FFFFFF;">STUDY PERFORMANCE SUMMARY</h1>
-            <p style="color: #94A3B8; font-size: 14px;">Great work! Here is the complete breakdown of your focus milestones.</p>
+            <p style="color: #94A3B8; font-size: 14px;">Great work! Your session has been recorded into the persistent archive.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -637,17 +651,15 @@ elif st.session_state.current_page == "completion":
 
     db = DatabaseManager()
     sessions = db.get_all_sessions()
-    latest = sessions[-1] if sessions else {}
+    latest = sessions[0] if sessions else (st.session_state.last_session_stats or {})
 
     c_score = latest.get("focus_score", 100)
     c_tot = latest.get("total_duration", 0)
     c_foc = latest.get("focused_duration", 0)
-    c_ph_dur = latest.get("phone_duration", 0)
-    c_dr_dur = latest.get("drowsiness_duration", 0)
     c_ph_cnt = latest.get("phone_events", 0)
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("🎯 Focus Score", f"{c_score}%")
+    m1.metric("🎯 Focus Score", f"{c_score:.0f}%")
     m2.metric("⏱️ Total Time", format_time(c_tot))
     m3.metric("✨ Focused Time", format_time(c_foc))
     m4.metric("📱 Phone Alerts", c_ph_cnt)
@@ -666,7 +678,7 @@ elif st.session_state.current_page == "completion":
 
 
 # ═════════════════════════════════════════════════════════════════════════════
-# 📊 SCREEN 4: HISTORY & ANALYTICS (Exact Desktop HistoryScreen Match)
+# 📊 SCREEN 4: HISTORY & ADMIN VAULT (Password Protected)
 # ═════════════════════════════════════════════════════════════════════════════
 elif st.session_state.current_page == "history":
     st.markdown(
@@ -674,7 +686,7 @@ elif st.session_state.current_page == "history":
         <div style="margin-bottom: 20px;">
             <div class="hero-badge">📊 STUDY HISTORY & ANALYTICS</div>
             <h2 style="font-size: 28px; font-weight: 900; color: #FFFFFF; margin: 4px 0;">Historical Performance Archives</h2>
-            <p style="color: #94A3B8; font-size: 13px;">Track your long-term focus progression and study consistency.</p>
+            <p style="color: #94A3B8; font-size: 13px;">Track your long-term focus progression, study consistency, and verification snapshots.</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -709,11 +721,74 @@ elif st.session_state.current_page == "history":
             df = pd.DataFrame(sessions)
             df["Duration"] = df["total_duration"].apply(format_time)
             df["Focused"] = df["focused_duration"].apply(format_time)
-            df["Score"] = df["focus_score"].apply(lambda s: f"{s}%")
-            display_df = df[["session_id", "student_name", "date", "Duration", "Focused", "Score"]]
+            df["Score"] = df["focus_score"].apply(lambda s: f"{s:.0f}%")
+            display_cols = ["session_id", "student_name", "date", "Duration", "Focused", "Score"]
+            display_df = df[[col for col in display_cols if col in df.columns]]
             st.dataframe(display_df, use_container_width=True)
         else:
             st.info("No study sessions recorded yet.")
+
+    st.markdown("<div style='height: 24px;'></div>", unsafe_allow_html=True)
+
+    # ── 🔐 ADMIN VERIFICATION VAULT (PASSWORD PROTECTED) ──────────────────────
+    st.markdown(
+        """
+        <div class="card-surface">
+            <div class="card-title">🔐 Admin Verification Vault (Student Identity Snapshots)</div>
+            <p style="color: #94A3B8; font-size: 13px; margin-top: -8px;">
+                Identity photos captured automatically 2 seconds after each student session begins. Strictly protected for authorized administrators.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if "admin_authenticated" not in st.session_state:
+        st.session_state.admin_authenticated = False
+
+    admin_col1, admin_col2 = st.columns([3, 1])
+
+    with admin_col1:
+        pwd_input = st.text_input("Enter Admin Password", type="password", placeholder="Enter admin password to view student snapshots...", label_visibility="collapsed")
+    with admin_col2:
+        if st.button("🔓 Unlock Vault", use_container_width=True, type="primary"):
+            if pwd_input == config.ADMIN_PASSWORD:
+                st.session_state.admin_authenticated = True
+                st.success("✅ Admin Access Granted!")
+                st.rerun()
+            else:
+                st.error("❌ Incorrect Admin Password. Access Denied.")
+
+    # Render Snapshots Gallery if Authenticated
+    if st.session_state.admin_authenticated:
+        st.markdown(
+            """
+            <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px; padding: 12px 16px; margin: 12px 0 20px 0; color: #10B981; font-weight: 700; font-size: 14px;">
+                🔓 Admin Access Active • Displaying 2-Second Identity Verification Snapshots
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        sessions_with_photos = [s for s in sessions if s.get("snapshot_path") and Path(s["snapshot_path"]).exists()]
+
+        if not sessions_with_photos:
+            st.info("No session snapshots found yet. Start a new session and a snapshot will be captured after 2 seconds!")
+        else:
+            gallery_cols = st.columns(3)
+            for idx, s in enumerate(sessions_with_photos):
+                with gallery_cols[idx % 3]:
+                    st.markdown(
+                        f"""
+                        <div style="background: #141724; border: 1px solid #1F2338; border-radius: 14px; padding: 14px; margin-bottom: 16px;">
+                            <div style="font-weight: 800; font-size: 15px; color: #FFFFFF;">👤 {s['student_name']} (Session #{s['session_id']})</div>
+                            <div style="font-size: 12px; color: #94A3B8; margin-bottom: 8px;">📅 {s['date']} • ⏱️ {format_time(s['total_duration'])} • 🎯 Score: {s['focus_score']:.0f}%</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                    st.image(s["snapshot_path"], use_container_width=True)
+                    st.markdown("<div style='height: 8px;'></div>", unsafe_allow_html=True)
 
 
 # ═════════════════════════════════════════════════════════════════════════════

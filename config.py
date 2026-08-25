@@ -15,10 +15,13 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 AUDIO_DIR = PROJECT_ROOT / "audio"
 MODELS_DIR = PROJECT_ROOT / "models"
 DATABASE_DIR = PROJECT_ROOT / "database"
+SNAPSHOTS_DIR = DATABASE_DIR / "snapshots"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 
 DATABASE_PATH = DATABASE_DIR / "study_focus.db"
 YOLO_MODEL_PATH = MODELS_DIR / "yolov8n.pt"
+
+ADMIN_PASSWORD = "Aman-Rajbhar-2005"
 
 # Audio alert source files
 DROWSINESS_ALERT_AUDIO = AUDIO_DIR / "uth jaa - EXTRA UNGLI WAALA (128k).mp3"
