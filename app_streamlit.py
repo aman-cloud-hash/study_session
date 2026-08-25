@@ -92,6 +92,155 @@ from src.analytics.analytics import AnalyticsEngine
 from src.utils.audio import AlertManager
 from src.utils.helpers import format_time, ensure_directories, detect_available_cameras
 
+# ─── WebRTC Video Processor for Cloud Web Streaming ──────────────────────────
+from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
+import av
+
+RTC_CONFIG = RTCConfiguration(
+    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
+)
+
+class WebRTCVisionProcessor:
+    def __init__(self):
+        self.face_detector = FaceMeshDetector()
+        self.eye_detector = EyeDetector()
+        self.phone_detector = PhoneDetector()
+        self.distraction_engine = DistractionEngine()
+        self.alert_manager = AlertManager()
+        self.student_name = "Student"
+        self.duration_min = 25
+        self.start_time = time.time()
+        self.snapshot_taken = False
+        self.session_db_id = None
+        self.snapshot_file_path = None
+        self.latest_engine_data = {}
+        self.latest_eye_data = {}
+        self.latest_phone_data = {}
+        self.latest_fps = 30.0
+        self.prev_time = time.time()
+        self.frame_count = 0
+        self.elapsed = 0.0
+
+    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
+        img = frame.to_ndarray(format="bgr24")
+        img = cv2.flip(img, 1)
+        self.frame_count += 1
+        self.elapsed = time.time() - self.start_time
+
+        # Calculate FPS
+        now = time.time()
+        dt = now - self.prev_time
+        self.prev_time = now
+        if dt > 0:
+            self.latest_fps = 0.9 * self.latest_fps + 0.1 * (1.0 / dt)
+
+        # 1. Face & Eye Tracking
+        face_results, face_count = self.face_detector.process(img)
+        if face_count > 0:
+            eye_data = self.eye_detector.detect_eye_state_from_face(img, face_results)
+        else:
+            eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
+
+        # 2. YOLO Phone Radar
+        phone_data = self.phone_detector.detect(img)
+
+        # 3. Decision Engine
+        engine_data = self.distraction_engine.update(
+            face_count=face_count,
+            eye_status=eye_data.get("eye_status", "UNKNOWN"),
+            phone_detected=phone_data.get("phone_detected", False),
+        )
+
+        # 4. Instant State-Based Audio Trigger
+        target_alert = engine_data.get("target_alert")
+        self.alert_manager.sync_alert_state(target_alert)
+
+        # 5. Draw Cyberpunk Reticle Bounding Box
+        if phone_data.get("phone_detected", False) and phone_data.get("detections"):
+            img = self.phone_detector.draw_detections(img, phone_data["detections"])
+
+        score_val = engine_data.get("focus_score", 100.0)
+
+        # 📸 3-SECOND AUTOMATIC IDENTITY SNAPSHOT & INSTANT DATABASE PERSISTENCE
+        if not self.snapshot_taken and (self.elapsed >= 3.0 or self.frame_count >= 30):
+            try:
+                snap_name = f"snap_{self.student_name}_{int(time.time())}.jpg"
+                snap_full_path = config.SNAPSHOTS_DIR / snap_name
+                cv2.imwrite(str(snap_full_path), img)
+                self.snapshot_file_path = str(snap_full_path)
+                self.snapshot_taken = True
+
+                db_init = DatabaseManager()
+                db_init.initialise()
+                self.session_db_id = db_init.save_session({
+                    "student_name": self.student_name,
+                    "total_duration": self.elapsed,
+                    "focused_duration": engine_data.get("focused_duration", 0.0),
+                    "distracted_duration": engine_data.get("distracted_duration", 0.0),
+                    "phone_duration": engine_data.get("phone_duration", 0.0),
+                    "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
+                    "phone_events": engine_data.get("phone_events", 0),
+                    "drowsiness_events": engine_data.get("drowsiness_events", 0),
+                    "focus_score": score_val,
+                    "snapshot_path": self.snapshot_file_path,
+                })
+            except Exception as e:
+                print(f"[WebRTC Snapshot Error] {e}")
+
+        # 6. Render Cyberpunk Glass HUD Overlay
+        h, w = img.shape[:2]
+        state = engine_data.get("current_state", DistractionState.FOCUSED)
+        if state == DistractionState.FOCUSED:
+            theme_col = (130, 210, 30)
+            state_lbl = "FOCUSED"
+        elif state == DistractionState.PHONE_DISTRACTION:
+            theme_col = (40, 60, 240)
+            state_lbl = "PHONE DETECTED"
+        elif state == DistractionState.DROWSY:
+            theme_col = (30, 160, 255)
+            state_lbl = "DROWSINESS DETECTED"
+        elif state == DistractionState.HIGH_DISTRACTION:
+            theme_col = (20, 20, 255)
+            state_lbl = "CRITICAL DISTRACTION"
+        elif state == DistractionState.NO_FACE:
+            theme_col = (160, 160, 160)
+            state_lbl = "NO FACE DETECTED"
+        else:
+            theme_col = (140, 140, 140)
+            state_lbl = "STUDY SENTRY"
+
+        overlay = img.copy()
+        cv2.rectangle(overlay, (14, 14), (250, 50), (12, 14, 22), -1)
+        cv2.circle(overlay, (32, 32), 6, theme_col, -1)
+        cv2.putText(overlay, state_lbl, (48, 37), cv2.FONT_HERSHEY_DUPLEX, 0.48, (240, 245, 255), 1, cv2.LINE_AA)
+
+        audio_on = self.alert_manager.is_playing
+        audio_x = max(14, w - 144)
+        audio_col = (40, 60, 240) if audio_on else (120, 180, 40)
+        cv2.rectangle(overlay, (audio_x, 14), (w - 14, 50), (12, 14, 22), -1)
+        cv2.circle(overlay, (audio_x + 18, 32), 5, audio_col, -1)
+        cv2.putText(overlay, "AUDIO ON" if audio_on else "AUDIO OFF", (audio_x + 32, 37), cv2.FONT_HERSHEY_DUPLEX, 0.46, (220, 225, 240), 1, cv2.LINE_AA)
+
+        eye_dur = engine_data.get("eye_closed_duration", 0.0)
+        if eye_dur > 0 and eye_data.get("eye_status") == "CLOSED":
+            prog = min(1.0, eye_dur / max(0.1, config.EYE_CLOSED_DURATION_THRESHOLD))
+            cv2.rectangle(overlay, (14, 58), (234, 66), (20, 20, 30), -1)
+            fill_w = int(220 * prog)
+            if fill_w > 0:
+                cv2.rectangle(overlay, (14, 58), (14 + fill_w, 66), (30, 160, 255), -1)
+            cv2.putText(overlay, f"Eyes Closed: {eye_dur:.1f}s", (244, 65), cv2.FONT_HERSHEY_DUPLEX, 0.40, (240, 240, 255), 1, cv2.LINE_AA)
+
+        cv2.addWeighted(overlay, 0.85, img, 0.15, 0, img)
+        cv2.rectangle(img, (14, 14), (250, 50), (50, 55, 75), 1)
+        cv2.rectangle(img, (audio_x, 14), (w - 14, 50), (50, 55, 75), 1)
+
+        self.latest_engine_data = engine_data
+        self.latest_eye_data = eye_data
+        self.latest_phone_data = phone_data
+
+        return av.VideoFrame.from_ndarray(img, format="bgr24")
+
+
 # ─── Page Setup ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="AI Study Focus Copilot",
@@ -473,155 +622,6 @@ if st.session_state.current_page == "home":
             '</div>',
             unsafe_allow_html=True,
         )
-
-
-# ─── WebRTC Video Processor for Cloud Web Streaming ──────────────────────────
-from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
-import av
-
-RTC_CONFIG = RTCConfiguration(
-    {"iceServers": [{"urls": ["stun:stun.l.google.com:19302"]}]}
-)
-
-class WebRTCVisionProcessor:
-    def __init__(self):
-        self.face_detector = FaceMeshDetector()
-        self.eye_detector = EyeDetector()
-        self.phone_detector = PhoneDetector()
-        self.distraction_engine = DistractionEngine()
-        self.alert_manager = AlertManager()
-        self.student_name = "Student"
-        self.duration_min = 25
-        self.start_time = time.time()
-        self.snapshot_taken = False
-        self.session_db_id = None
-        self.snapshot_file_path = None
-        self.latest_engine_data = {}
-        self.latest_eye_data = {}
-        self.latest_phone_data = {}
-        self.latest_fps = 30.0
-        self.prev_time = time.time()
-        self.frame_count = 0
-        self.elapsed = 0.0
-
-    def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
-        img = frame.to_ndarray(format="bgr24")
-        img = cv2.flip(img, 1)
-        self.frame_count += 1
-        self.elapsed = time.time() - self.start_time
-
-        # Calculate FPS
-        now = time.time()
-        dt = now - self.prev_time
-        self.prev_time = now
-        if dt > 0:
-            self.latest_fps = 0.9 * self.latest_fps + 0.1 * (1.0 / dt)
-
-        # 1. Face & Eye Tracking
-        face_results, face_count = self.face_detector.process(img)
-        if face_count > 0:
-            eye_data = self.eye_detector.detect_eye_state_from_face(img, face_results)
-        else:
-            eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
-
-        # 2. YOLO Phone Radar
-        phone_data = self.phone_detector.detect(img)
-
-        # 3. Decision Engine
-        engine_data = self.distraction_engine.update(
-            face_count=face_count,
-            eye_status=eye_data.get("eye_status", "UNKNOWN"),
-            phone_detected=phone_data.get("phone_detected", False),
-        )
-
-        # 4. Instant State-Based Audio Trigger
-        target_alert = engine_data.get("target_alert")
-        self.alert_manager.sync_alert_state(target_alert)
-
-        # 5. Draw Cyberpunk Reticle Bounding Box
-        if phone_data.get("phone_detected", False) and phone_data.get("detections"):
-            img = self.phone_detector.draw_detections(img, phone_data["detections"])
-
-        score_val = engine_data.get("focus_score", 100.0)
-
-        # 📸 3-SECOND AUTOMATIC IDENTITY SNAPSHOT & INSTANT DATABASE PERSISTENCE
-        if not self.snapshot_taken and (self.elapsed >= 3.0 or self.frame_count >= 30):
-            try:
-                snap_name = f"snap_{self.student_name}_{int(time.time())}.jpg"
-                snap_full_path = config.SNAPSHOTS_DIR / snap_name
-                cv2.imwrite(str(snap_full_path), img)
-                self.snapshot_file_path = str(snap_full_path)
-                self.snapshot_taken = True
-
-                db_init = DatabaseManager()
-                db_init.initialise()
-                self.session_db_id = db_init.save_session({
-                    "student_name": self.student_name,
-                    "total_duration": self.elapsed,
-                    "focused_duration": engine_data.get("focused_duration", 0.0),
-                    "distracted_duration": engine_data.get("distracted_duration", 0.0),
-                    "phone_duration": engine_data.get("phone_duration", 0.0),
-                    "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
-                    "phone_events": engine_data.get("phone_events", 0),
-                    "drowsiness_events": engine_data.get("drowsiness_events", 0),
-                    "focus_score": score_val,
-                    "snapshot_path": self.snapshot_file_path,
-                })
-            except Exception as e:
-                print(f"[WebRTC Snapshot Error] {e}")
-
-        # 6. Render Cyberpunk Glass HUD Overlay
-        h, w = img.shape[:2]
-        state = engine_data.get("current_state", DistractionState.FOCUSED)
-        if state == DistractionState.FOCUSED:
-            theme_col = (130, 210, 30)
-            state_lbl = "FOCUSED"
-        elif state == DistractionState.PHONE_DISTRACTION:
-            theme_col = (40, 60, 240)
-            state_lbl = "PHONE DETECTED"
-        elif state == DistractionState.DROWSY:
-            theme_col = (30, 160, 255)
-            state_lbl = "DROWSINESS DETECTED"
-        elif state == DistractionState.HIGH_DISTRACTION:
-            theme_col = (20, 20, 255)
-            state_lbl = "CRITICAL DISTRACTION"
-        elif state == DistractionState.NO_FACE:
-            theme_col = (160, 160, 160)
-            state_lbl = "NO FACE DETECTED"
-        else:
-            theme_col = (140, 140, 140)
-            state_lbl = "STUDY SENTRY"
-
-        overlay = img.copy()
-        cv2.rectangle(overlay, (14, 14), (250, 50), (12, 14, 22), -1)
-        cv2.circle(overlay, (32, 32), 6, theme_col, -1)
-        cv2.putText(overlay, state_lbl, (48, 37), cv2.FONT_HERSHEY_DUPLEX, 0.48, (240, 245, 255), 1, cv2.LINE_AA)
-
-        audio_on = self.alert_manager.is_playing
-        audio_x = max(14, w - 144)
-        audio_col = (40, 60, 240) if audio_on else (120, 180, 40)
-        cv2.rectangle(overlay, (audio_x, 14), (w - 14, 50), (12, 14, 22), -1)
-        cv2.circle(overlay, (audio_x + 18, 32), 5, audio_col, -1)
-        cv2.putText(overlay, "AUDIO ON" if audio_on else "AUDIO OFF", (audio_x + 32, 37), cv2.FONT_HERSHEY_DUPLEX, 0.46, (220, 225, 240), 1, cv2.LINE_AA)
-
-        eye_dur = engine_data.get("eye_closed_duration", 0.0)
-        if eye_dur > 0 and eye_data.get("eye_status") == "CLOSED":
-            prog = min(1.0, eye_dur / max(0.1, config.EYE_CLOSED_DURATION_THRESHOLD))
-            cv2.rectangle(overlay, (14, 58), (234, 66), (20, 20, 30), -1)
-            fill_w = int(220 * prog)
-            if fill_w > 0:
-                cv2.rectangle(overlay, (14, 58), (14 + fill_w, 66), (30, 160, 255), -1)
-            cv2.putText(overlay, f"Eyes Closed: {eye_dur:.1f}s", (244, 65), cv2.FONT_HERSHEY_DUPLEX, 0.40, (240, 240, 255), 1, cv2.LINE_AA)
-
-        cv2.addWeighted(overlay, 0.85, img, 0.15, 0, img)
-        cv2.rectangle(img, (14, 14), (250, 50), (50, 55, 75), 1)
-        cv2.rectangle(img, (audio_x, 14), (w - 14, 50), (50, 55, 75), 1)
-
-        self.latest_engine_data = engine_data
-        self.latest_eye_data = eye_data
-        self.latest_phone_data = phone_data
-
-        return av.VideoFrame.from_ndarray(img, format="bgr24")
 
 
 # ═════════════════════════════════════════════════════════════════════════════
