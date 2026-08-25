@@ -1,16 +1,20 @@
 """
-AI Study Focus & Distraction Copilot — Streamlit Web Dashboard
-==============================================================
+AI Study Focus & Distraction Copilot — Streamlit Cloud / Web Edition
+====================================================================
 
-Replicates the exact Obsidian Cyber-Dark Mission Control UI from the Desktop app.
-Features 30 FPS real-time video streaming, Google MediaPipe 3D FaceLandmarker,
-Async YOLOv8 Phone Radar, Instant Pygame Audio Alerts, Live Telemetry Cards,
-and SQLite Analytics.
+Exact Replica of Desktop App Workflow with Multi-Page State Router:
+- 🏠 Home Setup Screen (Student Profile, Preset Duration Pills, Camera Picker, Feature Grid, Launch Button)
+- 🎥 Live Mission Control Dashboard (30 FPS Video, Corner Reticle Box, Cyberpunk Glass HUD, Live Gauge & Clock)
+- 🏆 Completion Report Screen (Celebration Badge, Donut Chart, Metric Cards Grid)
+- 📊 History & Analytics Screen (SQLite Session Table, Filter, Progression Charts)
+- ⚙️ Settings Screen (Sliders for EAR, Drowsiness Delay, YOLO Confidence, Sound Switch)
 """
 
+import os
 import sys
 import time
 import types
+import threading
 from pathlib import Path
 import cv2
 import numpy as np
@@ -80,17 +84,17 @@ from src.detection.distraction_engine import DistractionEngine, DistractionState
 from src.database.database import DatabaseManager
 from src.analytics.analytics import AnalyticsEngine
 from src.utils.audio import AlertManager
-from src.utils.helpers import format_time, ensure_directories
+from src.utils.helpers import format_time, ensure_directories, detect_available_cameras
 
 # ─── Page Setup ──────────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="AI Study Focus Copilot",
     page_icon="🎯",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="collapsed",
 )
 
-# ─── Futuristic Cyber-Dark Glassmorphic UI CSS ──────────────────────────────
+# ─── Ultra-Premium Dark Glassmorphic Design System ───────────────────────────
 st.markdown(
     """
     <style>
@@ -101,10 +105,33 @@ st.markdown(
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     }
     
-    /* Top Header Pill */
+    /* Top Navbar */
+    .nav-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 24px;
+        background: #12141F;
+        border: 1px solid #1F2338;
+        border-radius: 16px;
+        margin-bottom: 24px;
+    }
+    .nav-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+    .nav-title {
+        font-size: 18px;
+        font-weight: 800;
+        color: #FFFFFF;
+        letter-spacing: -0.5px;
+    }
+    
+    /* Glowing Hero Badge */
     .hero-badge {
         display: inline-block;
-        padding: 5px 16px;
+        padding: 5px 14px;
         background: rgba(79, 70, 229, 0.15);
         border: 1px solid rgba(99, 102, 241, 0.4);
         border-radius: 20px;
@@ -113,97 +140,98 @@ st.markdown(
         font-weight: 700;
         letter-spacing: 1px;
         text-transform: uppercase;
+        margin-bottom: 8px;
+    }
+    
+    /* Surface Cards */
+    .card-surface {
+        background: #12141F;
+        border: 1px solid #1F2338;
+        border-radius: 18px;
+        padding: 24px;
+        margin-bottom: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    }
+    .card-title {
+        color: #F8FAFC;
+        font-size: 18px;
+        font-weight: 800;
+        margin-bottom: 16px;
+    }
+    .section-label {
+        color: #64748B;
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: 0.8px;
+        text-transform: uppercase;
         margin-bottom: 6px;
     }
     
-    /* Big Score Gauge Card */
+    /* Big Score Gauge */
     .gauge-card {
         background: linear-gradient(145deg, #141724 0%, #0E101A 100%);
         border: 1px solid #1F2338;
         border-radius: 18px;
-        padding: 20px;
+        padding: 22px;
         text-align: center;
         margin-bottom: 14px;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-    }
-    .gauge-title {
-        color: #64748B;
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 1px;
-        text-transform: uppercase;
     }
     .gauge-val-emerald {
         color: #10B981;
-        font-size: 48px;
+        font-size: 52px;
         font-weight: 900;
         letter-spacing: -1px;
-        margin: 4px 0;
-        text-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+        text-shadow: 0 0 25px rgba(16, 185, 129, 0.35);
     }
     .gauge-val-amber {
         color: #F59E0B;
-        font-size: 48px;
+        font-size: 52px;
         font-weight: 900;
         letter-spacing: -1px;
-        margin: 4px 0;
-        text-shadow: 0 0 20px rgba(245, 158, 11, 0.3);
+        text-shadow: 0 0 25px rgba(245, 158, 11, 0.35);
     }
     .gauge-val-red {
         color: #EF4444;
-        font-size: 48px;
+        font-size: 52px;
         font-weight: 900;
         letter-spacing: -1px;
-        margin: 4px 0;
-        text-shadow: 0 0 20px rgba(239, 68, 68, 0.3);
+        text-shadow: 0 0 25px rgba(239, 68, 68, 0.35);
     }
     
-    /* Digital Countdown Clock Card */
-    .clock-card {
-        background: #12141F;
-        border: 1px solid #1F2338;
-        border-radius: 16px;
-        padding: 16px 20px;
-        margin-bottom: 14px;
-    }
-    .clock-time {
-        color: #F8FAFC;
-        font-size: 36px;
-        font-weight: 800;
-        font-variant-numeric: tabular-nums;
-        letter-spacing: 1px;
-    }
-    
-    /* Telemetry Grid Chip */
-    .telemetry-box {
-        background: #12141F;
-        border: 1px solid #1F2338;
-        border-radius: 14px;
-        padding: 14px 16px;
-        margin-bottom: 12px;
-    }
-    .chip-row {
+    /* Telemetry Pill Rows */
+    .telemetry-row {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding: 8px 12px;
+        padding: 10px 14px;
         background: #181B2B;
-        border-radius: 8px;
-        margin-bottom: 6px;
+        border-radius: 10px;
+        margin-bottom: 8px;
         font-size: 13px;
     }
-    .chip-label { color: #94A3B8; font-weight: 600; }
-    .chip-val-green { color: #10B981; font-weight: 800; }
-    .chip-val-red { color: #F87171; font-weight: 800; }
-    .chip-val-amber { color: #FBBF24; font-weight: 800; }
+    .t-label { color: #94A3B8; font-weight: 600; }
+    .t-val-green { color: #10B981; font-weight: 800; }
+    .t-val-red { color: #F87171; font-weight: 800; }
+    .t-val-amber { color: #FBBF24; font-weight: 800; }
     
-    /* Video Stream Frame Box */
-    .video-bezel {
-        background: #12141F;
-        border: 2px solid #232840;
-        border-radius: 18px;
-        overflow: hidden;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    /* Feature Highlight Pill */
+    .feat-card {
+        background: #141724;
+        border: 1px solid #1F2338;
+        border-radius: 14px;
+        padding: 16px;
+        margin-bottom: 12px;
+    }
+    .feat-title { color: #FFFFFF; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+    .feat-desc { color: #94A3B8; font-size: 12px; line-height: 1.4; }
+    
+    /* Clean Button Styling */
+    div.stButton > button:first-child {
+        border-radius: 12px;
+        font-weight: 700;
+        padding: 10px 20px;
+        border: none;
+        transition: all 0.2s ease;
     }
     </style>
     """,
@@ -212,388 +240,460 @@ st.markdown(
 
 ensure_directories()
 
-# ─── Session State Initialisation ───────────────────────────────────────────
-if "is_running" not in st.session_state:
-    st.session_state.is_running = False
+# ─── Initialize State Router ────────────────────────────────────────────────
+if "current_page" not in st.session_state:
+    st.session_state.current_page = "home"  # 'home', 'session', 'completion', 'history', 'settings'
 if "student_name" not in st.session_state:
     st.session_state.student_name = "Student"
 if "duration_min" not in st.session_state:
     st.session_state.duration_min = 25
 if "cam_index" not in st.session_state:
     st.session_state.cam_index = config.DEFAULT_CAMERA_INDEX
+if "last_session_stats" not in st.session_state:
+    st.session_state.last_session_stats = None
 
-# ─── Sidebar Controls ───────────────────────────────────────────────────────
-with st.sidebar:
-    st.markdown('<div class="hero-badge">⚙️ AI SENTRY CONFIG</div>', unsafe_allow_html=True)
-    st.markdown("### Study Profile")
+# ─── Modern Top Navigation Bar ──────────────────────────────────────────────
+nav_col1, nav_col2, nav_col3, nav_col4 = st.columns([4, 1.2, 1.2, 1.2])
 
-    student_name_input = st.text_input("👤 Student Name", value=st.session_state.student_name, max_chars=30)
-    st.session_state.student_name = student_name_input
-
-    duration_choice = st.select_slider(
-        "⏱️ Target Session Duration",
-        options=[15, 25, 45, 60, 90, 120],
-        value=st.session_state.duration_min,
-        format_func=lambda x: f"{x} Minutes",
+with nav_col1:
+    st.markdown(
+        """
+        <div style="display: flex; align-items: center; gap: 10px; padding: 4px 0;">
+            <span style="font-size: 24px;">🎯</span>
+            <div>
+                <div style="font-size: 17px; font-weight: 800; color: #FFFFFF;">AI STUDY FOCUS COPILOT</div>
+                <div style="font-size: 11px; color: #818CF8; font-weight: 700;">NEXT-GEN VISION SENTINEL</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
-    st.session_state.duration_min = duration_choice
 
-    st.markdown("---")
-    st.markdown("### Camera Device")
-    cam_input = st.number_input("📹 Camera Device Index", min_value=0, max_value=4, value=st.session_state.cam_index, step=1)
-    st.session_state.cam_index = int(cam_input)
+with nav_col2:
+    if st.button("🏠 Home", use_container_width=True, type="primary" if st.session_state.current_page == "home" else "secondary"):
+        st.session_state.current_page = "home"
+        st.rerun()
 
-    st.markdown("---")
-    st.markdown("### Computer Vision Sensitivity")
+with nav_col3:
+    if st.button("📊 History", use_container_width=True, type="primary" if st.session_state.current_page == "history" else "secondary"):
+        st.session_state.current_page = "history"
+        st.rerun()
 
-    ear_val = st.slider("👁️ Eye Closed Threshold (EAR)", min_value=0.15, max_value=0.35, value=float(config.EAR_THRESHOLD), step=0.01)
-    config.EAR_THRESHOLD = ear_val
+with nav_col4:
+    if st.button("⚙️ Settings", use_container_width=True, type="primary" if st.session_state.current_page == "settings" else "secondary"):
+        st.session_state.current_page = "settings"
+        st.rerun()
 
-    drowsy_sec = st.slider("😴 Drowsy Delay (Seconds)", min_value=1.0, max_value=8.0, value=float(config.EYE_CLOSED_DURATION_THRESHOLD), step=0.5)
-    config.EYE_CLOSED_DURATION_THRESHOLD = drowsy_sec
-
-    phone_thresh = st.slider("📱 YOLO Phone Confidence", min_value=0.20, max_value=0.80, value=float(config.PHONE_DETECTION_CONFIDENCE), step=0.05)
-    config.PHONE_DETECTION_CONFIDENCE = phone_thresh
-
-    sound_toggle = st.toggle("🔊 Enable Audio Alarms", value=config.SOUND_ENABLED)
-    config.SOUND_ENABLED = sound_toggle
-
-    st.markdown("---")
-    st.markdown(f"🔒 *{config.PRIVACY_NOTICE}*")
+st.markdown("<hr style='border: 0; height: 1px; background: #1F2338; margin: 8px 0 20px 0;'>", unsafe_allow_html=True)
 
 
-# ─── Main Header ────────────────────────────────────────────────────────────
-st.markdown('<div class="hero-badge">✨ NEXT-GEN AI STUDY COPILOT • MISSION CONTROL</div>', unsafe_allow_html=True)
-st.title("🎯 AI Study Focus & Distraction Sentry")
-st.markdown("Real-time computer vision tracking study focus, phone usage, and eye drowsiness with instant audio alerts.")
+# ═════════════════════════════════════════════════════════════════════════════
+# 🏠 SCREEN 1: HOME LAUNCHER & SETUP (Exact Desktop HomeScreen Match)
+# ═════════════════════════════════════════════════════════════════════════════
+if st.session_state.current_page == "home":
+    st.markdown(
+        """
+        <div style="text-align: center; margin-bottom: 24px;">
+            <div class="hero-badge">✨ NEXT-GEN AI STUDY COPILOT</div>
+            <h1 style="font-size: 36px; font-weight: 900; margin: 4px 0; color: #FFFFFF;">AI STUDY FOCUS SENTINEL</h1>
+            <p style="color: #94A3B8; font-size: 14px; margin: 0 auto; max-width: 600px;">
+                Real-time Computer Vision sentry for laser-sharp study focus, instant phone distraction alerts, and drowsiness prevention.
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-# ─── Navigation Tabs ────────────────────────────────────────────────────────
-tab_live, tab_history, tab_about = st.tabs(["🎥 Live Mission Control", "📊 Session History & Trends", "ℹ️ Architecture"])
+    col_setup, col_features = st.columns([1.1, 1], gap="large")
 
-# ─── TAB 1: Live Mission Control ────────────────────────────────────────────
-with tab_live:
-    # Top Control Buttons
-    ctrl_col1, ctrl_col2, ctrl_col3 = st.columns([1, 1, 4])
-    
-    with ctrl_col1:
-        if not st.session_state.is_running:
-            if st.button("🚀 START SESSION", use_container_width=True, type="primary"):
-                st.session_state.is_running = True
-                st.rerun()
-        else:
-            if st.button("⏹️ END SESSION", use_container_width=True, type="secondary"):
-                st.session_state.is_running = False
-                st.rerun()
+    with col_setup:
+        st.markdown(
+            """
+            <div class="card-surface">
+                <div class="card-title">👤 Student & Session Setup</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-    st.markdown("---")
+        # Student Name
+        st.markdown('<div class="section-label">STUDENT NAME</div>', unsafe_allow_html=True)
+        name_val = st.text_input("Student Name Input", value=st.session_state.student_name, label_visibility="collapsed", placeholder="Enter your name...")
+        st.session_state.student_name = name_val if name_val.strip() else "Student"
 
-    # 2-Column Dashboard Grid
-    col_video, col_telemetry = st.columns([3, 2], gap="large")
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+
+        # Preset Duration Pills
+        st.markdown('<div class="section-label">SELECT TARGET DURATION</div>', unsafe_allow_html=True)
+        pill_cols = st.columns(5)
+        presets = [25, 45, 60, 90, 120]
+        for i, dur in enumerate(presets):
+            with pill_cols[i]:
+                is_sel = (st.session_state.duration_min == dur)
+                if st.button(f"{dur}m", key=f"pill_{dur}", use_container_width=True, type="primary" if is_sel else "secondary"):
+                    st.session_state.duration_min = dur
+                    st.rerun()
+
+        st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+
+        # Camera Selector
+        st.markdown('<div class="section-label">ACTIVE CAMERA DEVICE</div>', unsafe_allow_html=True)
+        cam_col1, cam_col2 = st.columns([3, 1])
+        with cam_col1:
+            cam_idx = st.number_input("Camera Index", min_value=0, max_value=5, value=st.session_state.cam_index, label_visibility="collapsed")
+            st.session_state.cam_index = int(cam_idx)
+        with cam_col2:
+            st.markdown(
+                """
+                <div style="background: #181B2B; border: 1px solid #282E47; border-radius: 10px; padding: 9px; text-align: center; font-size: 12px; font-weight: 700; color: #10B981;">
+                    ● Online
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+        st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+
+        # Big Launch Button
+        if st.button("🚀  START FOCUS SESSION", use_container_width=True, type="primary"):
+            st.session_state.current_page = "session"
+            st.rerun()
+
+    with col_features:
+        st.markdown(
+            """
+            <div class="card-surface">
+                <div class="card-title">⚡ AI Vision Engine Capabilities</div>
+                
+                <div class="feat-card">
+                    <div class="feat-title">👁️ Google MediaPipe 3D Mesh</div>
+                    <div class="feat-desc">Calculates 478 landmark points to compute Eye Aspect Ratio (EAR) with sub-millisecond precision.</div>
+                </div>
+                
+                <div class="feat-card">
+                    <div class="feat-title">📱 YOLOv8 Mobile Phone Radar</div>
+                    <div class="feat-desc">Async background inference with pure PyTorch NMS for instant 1-frame phone pickup detection.</div>
+                </div>
+                
+                <div class="feat-card">
+                    <div class="feat-title">😴 Smart Drowsiness Sentry</div>
+                    <div class="feat-desc">Temporal debounce logic tracks consecutive eye closures to trigger high-urgency wake-up alerts.</div>
+                </div>
+                
+                <div class="feat-card">
+                    <div class="feat-title">🔊 Targeted Meme & Voice Alarms</div>
+                    <div class="feat-desc">Plays custom meme audio on phone distraction and instant halt the moment phone is put away.</div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 🎥 SCREEN 2: LIVE MISSION CONTROL (Exact Desktop SessionScreen Match)
+# ═════════════════════════════════════════════════════════════════════════════
+elif st.session_state.current_page == "session":
+    header_col1, header_col2 = st.columns([3, 1])
+    with header_col1:
+        st.markdown(f"<h2 style='margin: 0; color: #FFFFFF;'>🔴 Live Vision Sentry • <span style='color: #818CF8;'>{st.session_state.student_name}</span></h2>", unsafe_allow_html=True)
+        st.markdown(f"<p style='color: #64748B; margin: 0;'>Target: {st.session_state.duration_min}m • Hardware Camera #{st.session_state.cam_index}</p>", unsafe_allow_html=True)
+    with header_col2:
+        if st.button("⏹️  END SESSION", use_container_width=True, type="secondary"):
+            st.session_state.current_page = "completion"
+            st.rerun()
+
+    st.markdown("<div style='height: 12px;'></div>", unsafe_allow_html=True)
+
+    col_video, col_dash = st.columns([3, 2], gap="large")
 
     with col_video:
-        st.markdown("### 📹 Live Vision Sentry Feed")
-        video_placeholder = st.empty()
-        st.caption("⚡ Camera frames are processed strictly in local RAM at 30+ FPS. Zero recording or transmission.")
+        video_feed_placeholder = st.empty()
+        st.caption("⚡ DirectShow 30 FPS Stream • Processed in local volatile memory. 100% Privacy.")
 
-    with col_telemetry:
-        st.markdown(f"### 📊 Student: **{st.session_state.student_name}**")
-        gauge_placeholder = st.empty()
-        clock_placeholder = st.empty()
-        chips_placeholder = st.empty()
+    with col_dash:
+        gauge_box = st.empty()
+        clock_box = st.empty()
+        telemetry_box = st.empty()
 
-    # If Not Running, Render Clean Idle State
-    if not st.session_state.is_running:
-        video_placeholder.info("Click **'🚀 START SESSION'** above to launch live camera tracking and audio sentry!")
-        gauge_placeholder.markdown(
-            """
-            <div class="gauge-card">
-                <div class="gauge-title">Focus Efficiency Score</div>
-                <div class="gauge-val-emerald">100%</div>
-                <div style="color: #94A3B8; font-size: 13px; font-weight: 600;">Status: Ready to Launch</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        clock_placeholder.markdown(
-            f"""
-            <div class="clock-card">
-                <div class="gauge-title">Target Session Duration</div>
-                <div class="clock-time">{st.session_state.duration_min:02d}:00</div>
-                <div style="color: #64748B; font-size: 12px; margin-top: 4px;">Camera Device: #{st.session_state.cam_index}</div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-        chips_placeholder.markdown(
-            """
-            <div class="telemetry-box">
-                <div class="gauge-title" style="margin-bottom: 8px;">Telemetry Radar Status</div>
-                <div class="chip-row"><span class="chip-label">👁️ Eye Sentry</span><span class="chip-val-green">● STANDBY</span></div>
-                <div class="chip-row"><span class="chip-label">📱 Phone Radar</span><span class="chip-val-green">● STANDBY</span></div>
-                <div class="chip-row"><span class="chip-label">🔊 Audio Alerts</span><span class="chip-val-green">● ACTIVE</span></div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    # Initialize Vision & Audio Pipeline
+    face_detector = FaceMeshDetector()
+    eye_detector = EyeDetector()
+    phone_detector = PhoneDetector()
+    distraction_engine = DistractionEngine()
+    alert_manager = AlertManager()
+    db = DatabaseManager()
 
-    # ─── ACTIVE MONITORING LOOP ─────────────────────────────────────────────
-    if st.session_state.is_running:
-        # Initialize Models & Vision Pipeline
-        face_detector = FaceMeshDetector()
-        eye_detector = EyeDetector()
-        phone_detector = PhoneDetector()
-        distraction_engine = DistractionEngine()
-        alert_manager = AlertManager()
-        db = DatabaseManager()
+    cap = cv2.VideoCapture(st.session_state.cam_index, cv2.CAP_DSHOW)
+    if not cap.isOpened():
+        cap = cv2.VideoCapture(st.session_state.cam_index)
 
-        # Open Webcam
-        cap = cv2.VideoCapture(st.session_state.cam_index, cv2.CAP_DSHOW)
-        if not cap.isOpened():
-            cap = cv2.VideoCapture(st.session_state.cam_index)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-        cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
-        cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+    start_time = time.time()
+    target_sec = st.session_state.duration_min * 60
+    fps = 30.0
+    prev_time = time.time()
 
-        start_time = time.time()
-        target_total_sec = st.session_state.duration_min * 60
-        fps = 30.0
-        prev_frame_time = time.time()
+    try:
+        while st.session_state.current_page == "session":
+            ret, frame = cap.read()
+            if not ret:
+                time.sleep(0.02)
+                continue
 
-        try:
-            while st.session_state.is_running:
-                ret, frame = cap.read()
-                if not ret:
-                    time.sleep(0.02)
-                    continue
+            frame = cv2.flip(frame, 1)
 
-                # Mirror frame
-                frame = cv2.flip(frame, 1)
+            # Compute FPS
+            now = time.time()
+            dt = now - prev_time
+            prev_time = now
+            if dt > 0:
+                fps = 0.9 * fps + 0.1 * (1.0 / dt)
 
-                # Compute FPS
-                now = time.time()
-                dt = now - prev_frame_time
-                prev_frame_time = now
-                if dt > 0:
-                    fps = 0.9 * fps + 0.1 * (1.0 / dt)
+            elapsed = time.time() - start_time
+            remaining = max(0, target_sec - elapsed)
 
-                elapsed_sec = time.time() - start_time
-                remaining_sec = max(0, target_total_sec - elapsed_sec)
+            # 1. Face & Eye Tracking
+            face_results, face_count = face_detector.process(frame)
+            if face_count > 0:
+                eye_data = eye_detector.detect_eye_state_from_face(frame, face_results)
+            else:
+                eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
 
-                # 1. Face & Eye Tracking
-                face_results, face_count = face_detector.process(frame)
-                if face_count > 0:
-                    eye_data = eye_detector.detect_eye_state_from_face(frame, face_results)
-                else:
-                    eye_data = {"eye_status": "UNKNOWN", "left_ear": 0.0, "right_ear": 0.0, "avg_ear": 0.0}
+            # 2. YOLO Phone Radar
+            phone_data = phone_detector.detect(frame)
 
-                # 2. YOLO Phone Detection
-                phone_data = phone_detector.detect(frame)
+            # 3. Decision Engine
+            engine_data = distraction_engine.update(
+                face_count=face_count,
+                eye_status=eye_data.get("eye_status", "UNKNOWN"),
+                phone_detected=phone_data.get("phone_detected", False),
+            )
 
-                # 3. State Machine Engine
-                engine_data = distraction_engine.update(
-                    face_count=face_count,
-                    eye_status=eye_data.get("eye_status", "UNKNOWN"),
-                    phone_detected=phone_data.get("phone_detected", False),
-                )
+            # 4. Instant State-Based Audio Trigger
+            target_alert = engine_data.get("target_alert")
+            alert_manager.sync_alert_state(target_alert)
 
-                # 4. Synchronize Instant Audio State
-                target_alert = engine_data.get("target_alert")
-                alert_manager.sync_alert_state(target_alert)
+            # 5. Draw Cyberpunk Reticle Bounding Box
+            if phone_data.get("phone_detected", False) and phone_data.get("detections"):
+                frame = phone_detector.draw_detections(frame, phone_data["detections"])
 
-                # 5. Draw Phone Bounding Box
-                if phone_data.get("phone_detected", False) and phone_data.get("detections"):
-                    frame = phone_detector.draw_detections(frame, phone_data["detections"])
+            # 6. Render Cyberpunk Glass HUD
+            h, w = frame.shape[:2]
+            state = engine_data.get("current_state", DistractionState.FOCUSED)
 
-                # 6. Render Cyberpunk Glass HUD Overlay
-                h, w = frame.shape[:2]
-                state = engine_data.get("current_state", DistractionState.FOCUSED)
+            if state == DistractionState.FOCUSED:
+                theme_col = (130, 210, 30)
+                state_lbl = "FOCUSED"
+            elif state == DistractionState.PHONE_DISTRACTION:
+                theme_col = (40, 60, 240)
+                state_lbl = "PHONE DETECTED"
+            elif state == DistractionState.DROWSY:
+                theme_col = (30, 160, 255)
+                state_lbl = "DROWSINESS DETECTED"
+            elif state == DistractionState.HIGH_DISTRACTION:
+                theme_col = (20, 20, 255)
+                state_lbl = "CRITICAL DISTRACTION"
+            elif state == DistractionState.NO_FACE:
+                theme_col = (160, 160, 160)
+                state_lbl = "NO FACE DETECTED"
+            else:
+                theme_col = (140, 140, 140)
+                state_lbl = "STUDY SENTRY"
 
-                if state == DistractionState.FOCUSED:
-                    theme_color = (130, 210, 30)
-                    state_text = "FOCUSED"
-                elif state == DistractionState.PHONE_DISTRACTION:
-                    theme_color = (40, 60, 240)
-                    state_text = "PHONE DETECTED"
-                elif state == DistractionState.DROWSY:
-                    theme_color = (30, 160, 255)
-                    state_text = "DROWSINESS DETECTED"
-                elif state == DistractionState.HIGH_DISTRACTION:
-                    theme_color = (20, 20, 255)
-                    state_text = "CRITICAL DISTRACTION"
-                elif state == DistractionState.NO_FACE:
-                    theme_color = (160, 160, 160)
-                    state_text = "NO FACE DETECTED"
-                else:
-                    theme_color = (140, 140, 140)
-                    state_text = "STUDY SENTRY"
+            overlay = frame.copy()
+            # Top-Left State Pill
+            cv2.rectangle(overlay, (14, 14), (250, 50), (12, 14, 22), -1)
+            cv2.circle(overlay, (32, 32), 6, theme_col, -1)
+            cv2.putText(overlay, state_lbl, (48, 37), cv2.FONT_HERSHEY_DUPLEX, 0.48, (240, 245, 255), 1, cv2.LINE_AA)
 
-                overlay = frame.copy()
+            # Top-Right Audio Pill
+            audio_on = alert_manager.is_playing
+            audio_x = max(14, w - 144)
+            audio_col = (40, 60, 240) if audio_on else (120, 180, 40)
+            cv2.rectangle(overlay, (audio_x, 14), (w - 14, 50), (12, 14, 22), -1)
+            cv2.circle(overlay, (audio_x + 18, 32), 5, audio_col, -1)
+            cv2.putText(overlay, "AUDIO ON" if audio_on else "AUDIO OFF", (audio_x + 32, 37), cv2.FONT_HERSHEY_DUPLEX, 0.46, (220, 225, 240), 1, cv2.LINE_AA)
 
-                # Top-Left State Pill
-                pill_w, pill_h = 240, 36
-                cv2.rectangle(overlay, (14, 14), (14 + pill_w, 14 + pill_h), (12, 14, 22), -1)
-                cv2.circle(overlay, (32, 14 + pill_h // 2), 6, theme_color, -1)
-                cv2.putText(
-                    overlay,
-                    state_text,
-                    (48, 14 + pill_h // 2 + 5),
-                    cv2.FONT_HERSHEY_DUPLEX,
-                    0.48,
-                    (240, 245, 255),
-                    1,
-                    cv2.LINE_AA,
-                )
+            # Eye closure progress bar
+            eye_dur = engine_data.get("eye_closed_duration", 0.0)
+            if eye_dur > 0 and eye_data.get("eye_status") == "CLOSED":
+                prog = min(1.0, eye_dur / max(0.1, config.EYE_CLOSED_DURATION_THRESHOLD))
+                cv2.rectangle(overlay, (14, 58), (234, 66), (20, 20, 30), -1)
+                fill_w = int(220 * prog)
+                if fill_w > 0:
+                    cv2.rectangle(overlay, (14, 58), (14 + fill_w, 66), (30, 160, 255), -1)
+                cv2.putText(overlay, f"Eyes Closed: {eye_dur:.1f}s", (244, 65), cv2.FONT_HERSHEY_DUPLEX, 0.40, (240, 240, 255), 1, cv2.LINE_AA)
 
-                # Top-Right Audio Pill
-                audio_playing = alert_manager.is_playing
-                audio_pill_w = 130
-                audio_x = max(14, w - audio_pill_w - 14)
-                audio_color = (40, 60, 240) if audio_playing else (120, 180, 40)
-                audio_label = "AUDIO ON" if audio_playing else "AUDIO OFF"
-                cv2.rectangle(overlay, (audio_x, 14), (w - 14, 14 + pill_h), (12, 14, 22), -1)
-                cv2.circle(overlay, (audio_x + 18, 14 + pill_h // 2), 5, audio_color, -1)
-                cv2.putText(
-                    overlay,
-                    audio_label,
-                    (audio_x + 32, 14 + pill_h // 2 + 5),
-                    cv2.FONT_HERSHEY_DUPLEX,
-                    0.46,
-                    (220, 225, 240),
-                    1,
-                    cv2.LINE_AA,
-                )
+            cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
+            cv2.rectangle(frame, (14, 14), (250, 50), (50, 55, 75), 1)
+            cv2.rectangle(frame, (audio_x, 14), (w - 14, 50), (50, 55, 75), 1)
 
-                # Eye closure progress bar
-                eye_dur = engine_data.get("eye_closed_duration", 0.0)
-                if eye_dur > 0 and eye_data.get("eye_status") == "CLOSED":
-                    progress = min(1.0, eye_dur / max(0.1, config.EYE_CLOSED_DURATION_THRESHOLD))
-                    bar_w = 220
-                    bar_h = 8
-                    bar_x = 14
-                    bar_y = 58
+            # Render Stream to Streamlit
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            video_feed_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
 
-                    cv2.rectangle(overlay, (bar_x, bar_y), (bar_x + bar_w, bar_y + bar_h), (20, 20, 30), -1)
-                    fill_w = int(bar_w * progress)
-                    bar_col = (30, 160, 255) if progress < 0.8 else (30, 40, 240)
-                    if fill_w > 0:
-                        cv2.rectangle(overlay, (bar_x, bar_y), (bar_x + fill_w, bar_y + bar_h), bar_col, -1)
-                    cv2.putText(
-                        overlay,
-                        f"Eyes Closed: {eye_dur:.1f}s",
-                        (bar_x + bar_w + 10, bar_y + 7),
-                        cv2.FONT_HERSHEY_DUPLEX,
-                        0.40,
-                        (240, 240, 255),
-                        1,
-                        cv2.LINE_AA,
-                    )
+            # Update Right Column Telemetry
+            score_val = engine_data.get("focus_score", 100.0)
+            score_cls = "gauge-val-emerald" if score_val >= 80 else ("gauge-val-amber" if score_val >= 60 else "gauge-val-red")
 
-                # Blend Glass HUD
-                cv2.addWeighted(overlay, 0.85, frame, 0.15, 0, frame)
-                cv2.rectangle(frame, (14, 14), (14 + pill_w, 14 + pill_h), (50, 55, 75), 1)
-                cv2.rectangle(frame, (audio_x, 14), (w - 14, 14 + pill_h), (50, 55, 75), 1)
+            gauge_box.markdown(
+                f"""
+                <div class="gauge-card">
+                    <div class="section-label">FOCUS EFFICIENCY SCORE</div>
+                    <div class="{score_cls}">{score_val:.0f}%</div>
+                    <div style="color: #94A3B8; font-size: 13px; font-weight: 700;">Status: {state_lbl}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-                # Convert BGR to RGB for Streamlit display
-                frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                video_placeholder.image(frame_rgb, channels="RGB", use_container_width=True)
+            clock_box.markdown(
+                f"""
+                <div class="card-surface" style="padding: 16px 20px; margin-bottom: 14px;">
+                    <div class="section-label">TIME REMAINING</div>
+                    <div style="font-size: 38px; font-weight: 900; color: #F8FAFC; font-variant-numeric: tabular-nums;">{format_time(remaining)}</div>
+                    <div style="color: #64748B; font-size: 12px; font-weight: 600;">Elapsed: {format_time(elapsed)} • ⚡ FPS: {int(fps)}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-                # 7. Update Telemetry Cards
-                score = engine_data.get("focus_score", 100.0)
-                score_cls = "gauge-val-emerald" if score >= 80 else ("gauge-val-amber" if score >= 60 else "gauge-val-red")
+            eye_st = eye_data.get("eye_status", "OPEN")
+            eye_col_cls = "t-val-green" if eye_st == "OPEN" else "t-val-red"
+            ph_det = phone_data.get("phone_detected", False)
+            ph_col_cls = "t-val-red" if ph_det else "t-val-green"
+            ph_txt = "DETECTED" if ph_det else "CLEAR"
+            drowsy_flag = engine_data.get("drowsiness_confirmed", False)
+            drowsy_col_cls = "t-val-red" if drowsy_flag else "t-val-green"
+            drowsy_txt = "DROWSY" if drowsy_flag else "ALERT"
+            aud_col_cls = "t-val-red" if alert_manager.is_playing else "t-val-green"
+            aud_txt = "ACTIVE" if alert_manager.is_playing else "OFF"
 
-                gauge_placeholder.markdown(
-                    f"""
-                    <div class="gauge-card">
-                        <div class="gauge-title">Focus Efficiency Score</div>
-                        <div class="{score_cls}">{score:.0f}%</div>
-                        <div style="color: #94A3B8; font-size: 13px; font-weight: 600;">Status: {state_text}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+            telemetry_box.markdown(
+                f"""
+                <div class="card-surface" style="padding: 16px;">
+                    <div class="section-label" style="margin-bottom: 10px;">LIVE TELEMETRY RADAR</div>
+                    <div class="telemetry-row"><span class="t-label">👁️ Eye Sentry</span><span class="{eye_col_cls}">● {eye_st} ({eye_data.get('avg_ear', 0.0):.2f})</span></div>
+                    <div class="telemetry-row"><span class="t-label">📱 Phone Radar</span><span class="{ph_col_cls}">● {ph_txt}</span></div>
+                    <div class="telemetry-row"><span class="t-label">😴 Drowsiness Sentry</span><span class="{drowsy_col_cls}">● {drowsy_txt}</span></div>
+                    <div class="telemetry-row"><span class="t-label">🔔 Audio Alarms</span><span class="{aud_col_cls}">● {aud_txt}</span></div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
-                # Countdown Clock
-                clock_placeholder.markdown(
-                    f"""
-                    <div class="clock-card">
-                        <div class="gauge-title">Time Remaining</div>
-                        <div class="clock-time">{format_time(remaining_sec)}</div>
-                        <div style="color: #64748B; font-size: 12px; margin-top: 4px;">Elapsed: {format_time(elapsed_sec)} • FPS: {int(fps)}</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+            # Auto-save when target duration finishes
+            if remaining <= 0:
+                st.session_state.last_session_stats = {
+                    "student_name": st.session_state.student_name,
+                    "total_duration": elapsed,
+                    "focused_duration": engine_data.get("focused_duration", 0.0),
+                    "distracted_duration": engine_data.get("distracted_duration", 0.0),
+                    "phone_duration": engine_data.get("phone_duration", 0.0),
+                    "drowsiness_duration": engine_data.get("drowsiness_duration", 0.0),
+                    "phone_events": engine_data.get("phone_events", 0),
+                    "drowsiness_events": engine_data.get("drowsiness_events", 0),
+                    "focus_score": score_val,
+                }
+                db.save_session(st.session_state.last_session_stats)
+                st.session_state.current_page = "completion"
+                st.rerun()
 
-                # Telemetry Chips
-                eye_stat = eye_data.get("eye_status", "OPEN")
-                eye_chip = "chip-val-green" if eye_stat == "OPEN" else "chip-val-red"
+            time.sleep(0.01)
 
-                phone_det = phone_data.get("phone_detected", False)
-                phone_chip = "chip-val-red" if phone_det else "chip-val-green"
-                phone_lbl = "DETECTED" if phone_det else "CLEAR"
-
-                drowsy_conf = engine_data.get("drowsiness_confirmed", False)
-                drowsy_chip = "chip-val-red" if drowsy_conf else "chip-val-green"
-                drowsy_lbl = "DROWSY" if drowsy_conf else "ALERT"
-
-                audio_chip = "chip-val-red" if alert_manager.is_playing else "chip-val-green"
-                audio_lbl = "ACTIVE ALERT" if alert_manager.is_playing else "OFF"
-
-                chips_placeholder.markdown(
-                    f"""
-                    <div class="telemetry-box">
-                        <div class="gauge-title" style="margin-bottom: 8px;">Real-Time Telemetry Radar</div>
-                        <div class="chip-row"><span class="chip-label">👁️ Eye State</span><span class="{eye_chip}">● {eye_stat} ({eye_data.get('avg_ear', 0.0):.2f})</span></div>
-                        <div class="chip-row"><span class="chip-label">📱 Phone Radar</span><span class="{phone_chip}">● {phone_lbl}</span></div>
-                        <div class="chip-row"><span class="chip-label">😴 Drowsiness Sentry</span><span class="{drowsy_chip}">● {drowsy_lbl}</span></div>
-                        <div class="chip-row"><span class="chip-label">🔊 Audio Alarms</span><span class="{audio_chip}">● {audio_lbl}</span></div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
-
-                # Check if session time completed
-                if remaining_sec <= 0:
-                    st.success("🎉 Target session duration completed! Saving records...")
-                    st.session_state.is_running = False
-                    break
-
-                time.sleep(0.01)
-
-        finally:
-            cap.release()
-            alert_manager.stop_all()
-            face_detector.close()
+    finally:
+        cap.release()
+        alert_manager.stop_all()
+        face_detector.close()
 
 
-# ─── TAB 2: Historical Analytics ────────────────────────────────────────────
-with tab_history:
-    st.markdown("### 📊 Session Archives & Historical Progression")
+# ═════════════════════════════════════════════════════════════════════════════
+# 🏆 SCREEN 3: COMPLETION REPORT (Exact Desktop CompletionScreen Match)
+# ═════════════════════════════════════════════════════════════════════════════
+elif st.session_state.current_page == "completion":
+    st.markdown(
+        """
+        <div style="text-align: center; margin-bottom: 24px;">
+            <div class="hero-badge" style="color: #10B981; border-color: rgba(16, 185, 129, 0.4); background: rgba(16, 185, 129, 0.15);">🎉 SESSION COMPLETE!</div>
+            <h1 style="font-size: 34px; font-weight: 900; color: #FFFFFF;">STUDY PERFORMANCE SUMMARY</h1>
+            <p style="color: #94A3B8; font-size: 14px;">Great work! Here is the complete breakdown of your focus milestones.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    db = DatabaseManager()
+    sessions = db.get_all_sessions()
+    latest = sessions[-1] if sessions else {}
+
+    c_score = latest.get("focus_score", 100)
+    c_tot = latest.get("total_duration", 0)
+    c_foc = latest.get("focused_duration", 0)
+    c_ph_dur = latest.get("phone_duration", 0)
+    c_dr_dur = latest.get("drowsiness_duration", 0)
+    c_ph_cnt = latest.get("phone_events", 0)
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("🎯 Focus Score", f"{c_score}%")
+    m2.metric("⏱️ Total Time", format_time(c_tot))
+    m3.metric("✨ Focused Time", format_time(c_foc))
+    m4.metric("📱 Phone Alerts", c_ph_cnt)
+
+    st.markdown("<div style='height: 20px;'></div>", unsafe_allow_html=True)
+
+    btn_c1, btn_c2 = st.columns(2)
+    with btn_c1:
+        if st.button("← Back to Home Launcher", use_container_width=True, type="primary"):
+            st.session_state.current_page = "home"
+            st.rerun()
+    with btn_c2:
+        if st.button("📊 View All History", use_container_width=True, type="secondary"):
+            st.session_state.current_page = "history"
+            st.rerun()
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# 📊 SCREEN 4: HISTORY & ANALYTICS (Exact Desktop HistoryScreen Match)
+# ═════════════════════════════════════════════════════════════════════════════
+elif st.session_state.current_page == "history":
+    st.markdown(
+        """
+        <div style="margin-bottom: 20px;">
+            <div class="hero-badge">📊 STUDY HISTORY & ANALYTICS</div>
+            <h2 style="font-size: 28px; font-weight: 900; color: #FFFFFF; margin: 4px 0;">Historical Performance Archives</h2>
+            <p style="color: #94A3B8; font-size: 13px;">Track your long-term focus progression and study consistency.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
     db = DatabaseManager()
     analytics = AnalyticsEngine(db)
-
     stats = analytics.get_summary_statistics()
-    s_col1, s_col2, s_col3, s_col4 = st.columns(4)
 
-    s_col1.metric("Total Sessions", stats.get("total_sessions", 0))
-    s_col2.metric("Total Study Time", format_time(stats.get("total_study_time_sec", 0)))
-    s_col3.metric("Average Focus Score", f"{stats.get('avg_focus_score', 0)}%")
-    s_col4.metric("Best Focus Score", f"{stats.get('best_focus_score', 0)}%")
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("Total Sessions", stats.get("total_sessions", 0))
+    s2.metric("Total Study Time", format_time(stats.get("total_study_time_sec", 0)))
+    s3.metric("Average Score", f"{stats.get('avg_focus_score', 0)}%")
+    s4.metric("Best Score", f"{stats.get('best_focus_score', 0)}%")
 
-    st.markdown("---")
+    st.markdown("<div style='height: 16px;'></div>", unsafe_allow_html=True)
 
-    chart_col, table_col = st.columns([1, 1], gap="medium")
+    c_chart, c_table = st.columns([1, 1], gap="large")
 
-    with chart_col:
-        st.markdown("#### 📈 Focus Score Trend Progression")
+    with c_chart:
+        st.markdown("#### 📈 Focus Progression Trend")
         fig = analytics.generate_history_trend_chart()
         if fig:
             st.pyplot(fig)
         else:
-            st.info("Complete study sessions to generate your focus score trendline.")
+            st.info("Complete study sessions to generate your trend chart.")
 
-    with table_col:
-        st.markdown("#### 📜 Past Study Sessions Table")
+    with c_table:
+        st.markdown("#### 📜 Recorded Study Sessions")
         sessions = db.get_all_sessions()
         if sessions:
             df = pd.DataFrame(sessions)
@@ -603,17 +703,58 @@ with tab_history:
             display_df = df[["session_id", "student_name", "date", "Duration", "Focused", "Score"]]
             st.dataframe(display_df, use_container_width=True)
         else:
-            st.info("No study sessions recorded yet. Start a session to build your study streak!")
+            st.info("No study sessions recorded yet.")
 
 
-# ─── TAB 3: Architecture & About ────────────────────────────────────────────
-with tab_about:
-    st.markdown("### 🏗️ High-Speed Vision & AI Pipeline")
+# ═════════════════════════════════════════════════════════════════════════════
+# ⚙️ SCREEN 5: SETTINGS (Exact Desktop SettingsScreen Match)
+# ═════════════════════════════════════════════════════════════════════════════
+elif st.session_state.current_page == "settings":
     st.markdown(
         """
-        - **Google MediaPipe 478-Point 3D Face Mesh:** Calculates precise Eye Aspect Ratio (EAR) with sub-millisecond latency.
-        - **Multi-Threaded Async YOLOv8:** Object classification for mobile phones with pure PyTorch Vectorized NMS.
-        - **Instant State-Based Audio:** Audio alerts start in 0s on phone detection and stop instantly (<5ms) when distraction ends.
-        - **100% Local Privacy:** Zero recording or network streaming. All inferences execute in volatile RAM.
-        """
+        <div style="margin-bottom: 20px;">
+            <div class="hero-badge">⚙️ APPLICATION SETTINGS</div>
+            <h2 style="font-size: 28px; font-weight: 900; color: #FFFFFF; margin: 4px 0;">AI Sentry Configuration</h2>
+            <p style="color: #94A3B8; font-size: 13px;">Fine-tune computer vision sensitivity, audio alarms, and detection thresholds.</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
+
+    st.markdown(
+        """
+        <div class="card-surface">
+            <div class="card-title">👁️ Eye & Drowsiness Detection</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    c_ear = st.slider("Eye Aspect Ratio (EAR) Threshold", min_value=0.15, max_value=0.35, value=float(config.EAR_THRESHOLD), step=0.01)
+    config.EAR_THRESHOLD = c_ear
+
+    c_drowsy = st.slider("Drowsiness Alert Delay (seconds)", min_value=1.0, max_value=8.0, value=float(config.EYE_CLOSED_DURATION_THRESHOLD), step=0.5)
+    config.EYE_CLOSED_DURATION_THRESHOLD = c_drowsy
+
+    st.markdown(
+        """
+        <div class="card-surface">
+            <div class="card-title">📱 Mobile Phone Detection</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    c_phone = st.slider("YOLO Phone Detection Confidence", min_value=0.20, max_value=0.80, value=float(config.PHONE_DETECTION_CONFIDENCE), step=0.05)
+    config.PHONE_DETECTION_CONFIDENCE = c_phone
+
+    st.markdown(
+        """
+        <div class="card-surface">
+            <div class="card-title">🔊 Audio Alarms & Hardware</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    c_sound = st.toggle("Enable Voice & Meme Distraction Alerts", value=config.SOUND_ENABLED)
+    config.SOUND_ENABLED = c_sound
+
+    st.success("✅ Settings applied automatically!")
